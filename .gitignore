@@ -50,3 +50,6 @@ next-env.d.ts
 
 # Audit logs
 /logs/
+
+# Git worktrees
+/.worktrees/
