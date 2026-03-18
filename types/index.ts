@@ -1,0 +1,145 @@
+/**
+ * Shared domain types for EPL Magazine Tracker.
+ * Import from '@/types' in all other files.
+ */
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+/** User role — ADMIN has full CRUD, STAFF can only view and mark received */
+export type UserRole = 'ADMIN' | 'STAFF'
+
+/** Publication cadence — drives next-expected-date calculations */
+export type CadenceType = 'WEEKLY' | 'BI_WEEKLY' | 'MONTHLY' | 'BI_MONTHLY' | 'SEASONAL'
+
+/** Dashboard status bucket for a magazine */
+export type MagazineStatus = 'overdue' | 'this_week' | 'upcoming' | 'never_received'
+
+// ---------------------------------------------------------------------------
+// Auth / Session
+// ---------------------------------------------------------------------------
+
+/**
+ * Payload stored in the encrypted JWT session cookie.
+ * `expiresAt` is a Date when created by jose, but deserialised as a string.
+ */
+export interface SessionPayload {
+  userId: string
+  role: UserRole
+  expiresAt: Date | string
+}
+
+/** Minimal session info used in Server Components / route handlers */
+export interface SessionUser {
+  userId: string
+  role: UserRole
+}
+
+/** Full user object returned to authenticated callers */
+export interface AuthUser {
+  id: string
+  name: string
+  email: string
+  role: UserRole
+  active: boolean
+}
+
+// ---------------------------------------------------------------------------
+// API responses
+// ---------------------------------------------------------------------------
+
+/**
+ * Standard API response shape.
+ * Success responses optionally carry data; error responses carry a message string.
+ */
+export type ApiResponse<T = undefined> =
+  | { success: true; data?: T }
+  | { error: string }
+
+// ---------------------------------------------------------------------------
+// Magazine
+// ---------------------------------------------------------------------------
+
+/** Raw magazine record from the database */
+export interface Magazine {
+  id: string
+  name: string
+  cadence: CadenceType
+  active: boolean
+  notes: string | null
+  createdAt: Date
+  updatedAt: Date
+}
+
+/** Magazine enriched with computed dashboard status */
+export interface MagazineWithStatus extends Magazine {
+  lastReceivedDate: Date | null
+  nextExpectedDate: Date | null
+  status: MagazineStatus
+  lastReceivedBy?: string | null
+}
+
+/** Magazine with receipt count (used in admin views) */
+export interface MagazineWithCount extends Magazine {
+  _count: { receipts: number }
+}
+
+// ---------------------------------------------------------------------------
+// Receipts
+// ---------------------------------------------------------------------------
+
+/** Raw issue receipt record */
+export interface IssueReceipt {
+  id: string
+  magazineId: string
+  receivedById: string
+  receivedDate: Date
+  notes: string | null
+  createdAt: Date
+}
+
+/** Receipt with the receiver's name joined */
+export interface ReceiptWithReceiver extends IssueReceipt {
+  receivedBy: { name: string }
+}
+
+// ---------------------------------------------------------------------------
+// Users (admin views)
+// ---------------------------------------------------------------------------
+
+/** User record as shown in the admin users table */
+export interface AdminUser {
+  id: string
+  name: string
+  email: string
+  role: UserRole
+  active: boolean
+  createdAt: Date
+  _count: { receipts: number }
+}
+
+// ---------------------------------------------------------------------------
+// Audit log
+// ---------------------------------------------------------------------------
+
+/** Discriminated union of known audit action strings */
+export type AuditAction =
+  | 'LOGIN'
+  | 'LOGOUT'
+  | 'MAGAZINE_CREATED'
+  | 'MAGAZINE_UPDATED'
+  | 'MAGAZINE_DELETED'
+  | 'RECEIPT_CREATED'
+  | 'USER_CREATED'
+  | 'USER_UPDATED'
+  | 'USER_DELETED'
+
+/** Parsed JSON line from logs/audit.log */
+export interface AuditLogEntry {
+  timestamp: string
+  level: string
+  userId: string
+  action: AuditAction | string
+  [key: string]: unknown // spread details passed to auditLog()
+}

@@ -4,8 +4,14 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { decrypt } from './session.js'
 import db from './db.js'
+import type { SessionUser, AuthUser } from '@/types'
 
-export const verifySession = cache(async () => {
+/**
+ * Verifies the current session cookie and returns the session user.
+ * Redirects to /login if the session is missing or invalid.
+ * Cached per request via React's `cache()`.
+ */
+export const verifySession = cache(async (): Promise<SessionUser> => {
   const cookieStore = await cookies()
   const cookie = cookieStore.get('session')?.value
   const session = await decrypt(cookie)
@@ -14,10 +20,15 @@ export const verifySession = cache(async () => {
     redirect('/login')
   }
 
-  return { userId: session.userId, role: session.role }
+  return { userId: session.userId as string, role: session.role }
 })
 
-export const getUser = cache(async () => {
+/**
+ * Returns the full authenticated user record.
+ * Redirects to /login if the session is invalid or the user is inactive.
+ * Cached per request via React's `cache()`.
+ */
+export const getUser = cache(async (): Promise<AuthUser> => {
   const session = await verifySession()
 
   const user = await db.user.findUnique({

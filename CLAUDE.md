@@ -17,7 +17,7 @@ Staff log when magazines arrive; the system tracks cadence, flags overdue issues
 | Layer | Choice | Rationale |
 |---|---|---|
 | Framework | Next.js (latest stable), App Router | Full-stack in one repo; user is familiar with it |
-| Language | **JavaScript only** (no TypeScript) | Co-workers must be able to read the code |
+| Language | **TypeScript** (`strict: true`) | Type-safe; peer-readable with TSDoc comments in `docs/` |
 | Database | SQLite via **Prisma ORM** | No extra server; file-based; easy Docker volume backup |
 | Auth | Custom session cookies with **jose** (JWT) + **bcrypt** | Simple, no OAuth needed; HTTP-only cookies |
 | Styling | **Tailwind CSS** + **shadcn/ui** | Fast to build clean internal UIs |
@@ -286,7 +286,9 @@ npx prisma generate  # Regenerate Prisma client after schema change
 
 ## Conventions
 
-- **JavaScript only** — no `.ts` / `.tsx` files ever
+- **TypeScript for all source files** — use `.ts` / `.tsx`; `allowJs: true` is temporary (removed in final cleanup)
+- `strict: true` with zero `any`; use `as unknown as T` only where genuinely needed (mark with `// TODO: improve typing`)
+- TSDoc (`/** */` with typed params) on every exported function/type in `lib/` and `types/`
 - Server Components by default; add `'use client'` only for interactive forms/state
 - All data mutations via **Server Actions** or API route handlers — no client-side fetch for mutations
 - Use `date-fns` for all date arithmetic (already a Next.js ecosystem staple)
