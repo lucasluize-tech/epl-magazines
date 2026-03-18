@@ -2,8 +2,8 @@ import 'server-only'
 import { cache } from 'react'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
-import { decrypt } from './session.js'
-import db from './db.js'
+import { decrypt } from './session'
+import db from './db'
 import type { SessionUser, AuthUser } from '@/types'
 
 /**

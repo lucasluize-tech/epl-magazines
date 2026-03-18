@@ -30,50 +30,55 @@ Staff log when magazines arrive; the system tracks cadence, flags overdue issues
 ```
 epl-magazines/
 ├── app/
-│   ├── layout.js                  # Root layout
-│   ├── page.js                    # Redirect → /dashboard or /login
+│   ├── layout.tsx                 # Root layout
+│   ├── page.tsx                   # Redirect → /dashboard or /login
 │   ├── (auth)/
 │   │   └── login/
-│   │       └── page.js
+│   │       └── page.tsx
 │   ├── (dashboard)/
-│   │   ├── layout.js              # Sidebar + nav (authenticated shell)
-│   │   ├── page.js                # Dashboard: upcoming + overdue
+│   │   ├── layout.tsx             # Sidebar + nav (authenticated shell)
+│   │   ├── dashboard/
+│   │   │   └── page.tsx           # Dashboard: upcoming + overdue
 │   │   ├── magazines/
-│   │   │   ├── page.js            # Magazine list + mark-received
+│   │   │   ├── page.tsx           # Magazine list + mark-received
 │   │   │   └── [id]/
-│   │   │       └── page.js        # Magazine detail + receipt history
+│   │   │       └── page.tsx       # Magazine detail + receipt history
 │   │   ├── admin/
 │   │   │   ├── magazines/
-│   │   │   │   └── page.js        # Admin: create/edit/delete magazines
+│   │   │   │   └── page.tsx       # Admin: create/edit/delete magazines
 │   │   │   └── users/
-│   │   │       └── page.js        # Admin: create/delete users
+│   │   │       └── page.tsx       # Admin: create/delete users
 │   │   └── log/
-│   │       └── page.js            # View audit log (admin only)
+│   │       └── page.tsx           # View audit log (admin only)
 │   └── api/
 │       ├── auth/
-│       │   ├── login/route.js
-│       │   └── logout/route.js
+│       │   ├── login/route.ts
+│       │   └── logout/route.ts
 │       ├── magazines/
-│       │   ├── route.js           # GET list, POST create
+│       │   ├── route.ts           # GET list, POST create
 │       │   └── [id]/
-│       │       ├── route.js       # GET, PUT, DELETE
+│       │       ├── route.ts       # GET, PUT, DELETE
 │       │       └── receipts/
-│       │           └── route.js   # POST mark-received, GET history
+│       │           └── route.ts   # POST mark-received, GET history
 │       └── users/
-│           ├── route.js           # GET list, POST create (admin)
-│           └── [id]/route.js      # DELETE (admin)
+│           ├── route.ts           # GET list, POST create (admin)
+│           └── [id]/route.ts      # DELETE (admin)
+├── types/
+│   └── index.ts                   # Shared domain types (import from '@/types')
 ├── lib/
-│   ├── session.js                 # encrypt/decrypt JWT, createSession, deleteSession
-│   ├── dal.js                     # Data Access Layer: verifySession, getUser
-│   ├── logger.js                  # Winston audit logger
-│   ├── cadence.js                 # computeNextExpectedDate, isOverdue helpers
-│   └── db.js                     # Prisma client singleton
+│   ├── session.ts                 # encrypt/decrypt JWT, createSession, deleteSession
+│   ├── dal.ts                     # Data Access Layer: verifySession, getUser
+│   ├── logger.ts                  # Winston audit logger
+│   ├── cadence.ts                 # computeNextExpectedDate, isOverdue helpers
+│   ├── utils.ts                   # cn() helper for Tailwind class merging
+│   └── db.ts                      # Prisma client singleton
 ├── components/
-│   ├── ui/                        # shadcn/ui generated components
-│   ├── MagazineCard.js
-│   ├── OverdueAlert.js
-│   └── ReceiptForm.js
-├── middleware.js                  # Route protection (redirect unauthed → /login)
+│   ├── ui/                        # shadcn/ui generated components (.tsx)
+│   ├── MagazineCard.tsx
+│   ├── Sidebar.tsx
+│   └── ...                        # All components as .tsx with Props interfaces
+├── docs/                          # 9 documentation files for non-TS peers
+├── proxy.ts                       # Route protection (redirect unauthed → /login)
 ├── prisma/
 │   ├── schema.prisma
 │   └── dev.db                    # SQLite file (git-ignored, Docker volume)
@@ -286,7 +291,7 @@ npx prisma generate  # Regenerate Prisma client after schema change
 
 ## Conventions
 
-- **TypeScript for all source files** — use `.ts` / `.tsx`; `allowJs: true` is temporary (removed in final cleanup)
+- **TypeScript for all source files** — use `.ts` / `.tsx` exclusively; no `.js` / `.jsx` source files
 - `strict: true` with zero `any`; use `as unknown as T` only where genuinely needed (mark with `// TODO: improve typing`)
 - TSDoc (`/** */` with typed params) on every exported function/type in `lib/` and `types/`
 - Server Components by default; add `'use client'` only for interactive forms/state
