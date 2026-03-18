@@ -1,0 +1,54 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id           String         @id @default(cuid())
+  name         String
+  email        String         @unique
+  passwordHash String
+  role         Role           @default(STAFF)
+  active       Boolean        @default(true)
+  createdAt    DateTime       @default(now())
+  receipts     IssueReceipt[]
+}
+
+enum Role {
+  ADMIN
+  STAFF
+}
+
+model Magazine {
+  id        String         @id @default(cuid())
+  name      String
+  cadence   Cadence
+  active    Boolean        @default(true)
+  notes     String?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  receipts  IssueReceipt[]
+}
+
+enum Cadence {
+  WEEKLY
+  BI_WEEKLY
+  MONTHLY
+  BI_MONTHLY
+  SEASONAL
+}
+
+model IssueReceipt {
+  id           String   @id @default(cuid())
+  magazine     Magazine @relation(fields: [magazineId], references: [id])
+  magazineId   String
+  receivedBy   User     @relation(fields: [receivedById], references: [id])
+  receivedById String
+  receivedDate DateTime @default(now())
+  notes        String?
+  createdAt    DateTime @default(now())
+}

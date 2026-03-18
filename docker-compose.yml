@@ -1,0 +1,11 @@
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./prisma:/app/prisma      # SQLite file persistence
+      - ./logs:/app/logs          # Audit log persistence
+    env_file:
+      - .env.local
+    restart: unless-stopped
