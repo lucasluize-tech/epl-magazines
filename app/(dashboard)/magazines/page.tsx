@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import type { MagazineWithStatus } from '@/types'
 import { verifySession } from '@/lib/dal'
 import db from '@/lib/db'
+import { resolveActiveBranchId } from '@/lib/branch'
 import { computeNextExpectedDate, getMagazineStatus, CADENCE_LABELS } from '@/lib/cadence'
 import { format } from 'date-fns'
 import Link from 'next/link'
@@ -36,19 +37,38 @@ export default async function MagazinesPage({ searchParams }: PageProps) {
   const params = await searchParams
   const filter = (typeof params?.status === 'string' ? params.status : undefined) || 'all'
 
+  const activeBranchId = await resolveActiveBranchId()
+
+  const branchSubscriptions = await db.branchMagazine.findMany({
+    where: { branchId: activeBranchId, active: true },
+    select: { magazineId: true },
+  })
+  const subscribedMagazineIds = branchSubscriptions.map(s => s.magazineId)
+
   const magazines = await db.magazine.findMany({
-    where: { active: true },
+    where: {
+      id: { in: subscribedMagazineIds },
+      active: true,
+    },
     include: {
       receipts: {
-        orderBy: { receivedDate: 'desc' },
+        where: { branchId: activeBranchId },
+        orderBy: { receivedDate: 'desc' as const },
         take: 1,
         include: { receivedBy: { select: { name: true } } },
+      },
+      _count: {
+        select: {
+          receipts: { where: { branchId: activeBranchId } },
+        },
       },
     },
     orderBy: { name: 'asc' },
   })
 
-  const processed: MagazineWithStatus[] = magazines.map((mag) => {
+  type MagazineRow = MagazineWithStatus & { _count: { receipts: number } }
+
+  const processed: MagazineRow[] = magazines.map((mag) => {
     const lastReceipt = mag.receipts[0] ?? null
     const lastReceivedDate = lastReceipt?.receivedDate ?? null
     const nextExpectedDate = computeNextExpectedDate(lastReceivedDate, mag.cadence)
@@ -94,6 +114,7 @@ export default async function MagazinesPage({ searchParams }: PageProps) {
                 <TableHead className="font-semibold" style={{ color: 'oklch(0.30 0.028 62)' }}>Name</TableHead>
                 <TableHead className="font-semibold" style={{ color: 'oklch(0.30 0.028 62)' }}>Cadence</TableHead>
                 <TableHead className="font-semibold" style={{ color: 'oklch(0.30 0.028 62)' }}>Status</TableHead>
+                <TableHead className="font-semibold" style={{ color: 'oklch(0.30 0.028 62)' }}>Total Issues</TableHead>
                 <TableHead className="font-semibold" style={{ color: 'oklch(0.30 0.028 62)' }}>Last Received</TableHead>
                 <TableHead className="font-semibold" style={{ color: 'oklch(0.30 0.028 62)' }}>Next Expected</TableHead>
                 <TableHead className="font-semibold text-right" style={{ color: 'oklch(0.30 0.028 62)' }}>Actions</TableHead>
@@ -135,6 +156,11 @@ export default async function MagazinesPage({ searchParams }: PageProps) {
                     </Badge>
                   </TableCell>
                   <TableCell><MagazineStatusBadge status={mag.status} /></TableCell>
+                  <TableCell>
+                    <span className="text-sm font-semibold" style={{ color: 'oklch(0.20 0.028 62)' }}>
+                      {mag._count.receipts}
+                    </span>
+                  </TableCell>
                   <TableCell>
                     <div>
                       <span className="text-sm" style={{ color: 'oklch(0.25 0.028 62)' }}>
