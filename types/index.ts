@@ -16,6 +16,9 @@ export type CadenceType = 'WEEKLY' | 'BI_WEEKLY' | 'MONTHLY' | 'BI_MONTHLY' | 'S
 /** Dashboard status bucket for a magazine */
 export type MagazineStatus = 'overdue' | 'this_week' | 'upcoming' | 'never_received'
 
+/** Short code identifying each library branch */
+export type BranchCode = 'MAIN' | 'NORTH' | 'CB' | 'MOBILE'
+
 // ---------------------------------------------------------------------------
 // Auth / Session
 // ---------------------------------------------------------------------------
@@ -94,14 +97,44 @@ export interface IssueReceipt {
   id: string
   magazineId: string
   receivedById: string
+  branchId: string | null
   receivedDate: Date
   notes: string | null
   createdAt: Date
 }
 
-/** Receipt with the receiver's name joined */
+/** Receipt with the receiver's name and branch name joined */
 export interface ReceiptWithReceiver extends IssueReceipt {
   receivedBy: { name: string }
+  branch?: { name: string; code: string } | null
+}
+
+// ---------------------------------------------------------------------------
+// Branches
+// ---------------------------------------------------------------------------
+
+/** Raw branch record from the database */
+export interface Branch {
+  id: string
+  name: string
+  code: BranchCode
+  active: boolean
+  createdAt: Date
+}
+
+/** Branch magazine subscription (join table record) */
+export interface BranchMagazine {
+  id: string
+  branchId: string
+  magazineId: string
+  quantity: number
+  active: boolean
+  createdAt: Date
+}
+
+/** Branch with count of active magazine subscriptions */
+export interface BranchWithCount extends Branch {
+  _count: { magazines: number }
 }
 
 // ---------------------------------------------------------------------------
@@ -134,6 +167,9 @@ export type AuditAction =
   | 'USER_CREATED'
   | 'USER_UPDATED'
   | 'USER_DELETED'
+  | 'BRANCH_MAGAZINE_ADDED'
+  | 'BRANCH_MAGAZINE_UPDATED'
+  | 'BRANCH_MAGAZINE_REMOVED'
 
 /** Parsed JSON line from logs/audit.log */
 export interface AuditLogEntry {
