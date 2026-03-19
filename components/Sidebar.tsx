@@ -3,7 +3,8 @@
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import type { LucideIcon } from 'lucide-react'
-import type { AuthUser } from '@/types'
+import type { AuthUser, Branch } from '@/types'
+import BranchSelector from './BranchSelector'
 import {
   LayoutDashboard,
   BookOpen,
@@ -18,6 +19,8 @@ import { Separator } from '@/components/ui/separator'
 
 export interface SidebarProps {
   user: AuthUser
+  branches: Branch[]
+  activeBranchId: string
 }
 
 interface NavItem {
@@ -43,7 +46,7 @@ const adminItems: NavItem[] = [
   { href: '/log', label: 'Audit Log', icon: ScrollText },
 ]
 
-export default function Sidebar({ user }: SidebarProps) {
+export default function Sidebar({ user, branches, activeBranchId }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
 
@@ -135,7 +138,13 @@ export default function Sidebar({ user }: SidebarProps) {
         )}
       </nav>
 
-      {/* User info + logout */}
+      {/* Branch selector + user info + logout */}
+      <div
+        className="border-t mt-auto"
+        style={{ borderColor: 'oklch(0.30 0.04 158)' }}
+      >
+        <BranchSelector branches={branches} activeBranchId={activeBranchId} />
+      </div>
       <div className="border-t p-4 space-y-3" style={{ borderColor: 'oklch(0.30 0.055 158)' }}>
         <div className="flex items-center gap-3 px-1">
           <div
