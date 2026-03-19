@@ -15,6 +15,8 @@ The admin magazines page (`/admin/magazines`) shows a global list of magazines w
 
 The server component reads the active branch cookie and queries `BranchMagazine` records for that branch, joining the related `Magazine` data, receipt count (current calendar year, Jan–Dec), and most recent receipt date.
 
+**No branch cookie fallback:** If no active branch cookie is set (e.g., cleared cookies, direct URL), redirect to the login page. The branch cookie is set at login and is required for all branch-aware views.
+
 **Table columns:**
 
 | Name | Cadence | Quantity | Total Issues | Last Received | Next Expected | Status | Notes | Actions |
@@ -23,7 +25,7 @@ The server component reads the active branch cookie and queries `BranchMagazine`
 - **Total Issues** — count of `IssueReceipt` for this magazine+branch in the current calendar year (Jan 1 – Dec 31), resets each January
 - **Last Received** — most recent `IssueReceipt.receivedDate` for this magazine+branch
 - **Next Expected** — computed from last received date + cadence via `computeNextExpectedDate()`
-- **Status** — toggle slider (`Switch` component) controlling `BranchMagazine.active`
+- **Status** — toggle slider (`Switch` component) controlling `BranchMagazine.active` (branch-specific, not the global `Magazine.active`). Deactivating a magazine at one branch does not affect other branches. There is no global deactivation from this view — global magazine management (e.g., discontinuing a title entirely) can be handled by removing it from all branches individually.
 
 **Pagination:** Server-side, 10 rows per page, Previous/Next controls at bottom.
 
@@ -41,14 +43,14 @@ Single dialog with two sections:
 - **Magazine details** (global): name, cadence, notes → `PUT /api/magazines/[id]`
 - **Branch subscription** (branch-specific): quantity, last received date → `PUT /api/branches/[branchId]/magazines/[magazineId]`
 
-Changing last received date inserts a new `IssueReceipt` via `POST /api/magazines/[id]/receipts` with the chosen date and a system note (e.g., "Manually adjusted by admin"). The system always uses the most recently created receipt as the anchor for next expected date computation.
+Changing last received date inserts a new `IssueReceipt` via `POST /api/magazines/[id]/receipts` with the chosen date, the active `branchId`, the admin's own user ID as `receivedById`, and a system note (e.g., "Manually adjusted by admin"). The system always uses the most recently created receipt as the anchor for next expected date computation.
 
 ### Delete Flow
 
 The delete confirmation offers two options:
 
-- **"Remove from this branch"** — `DELETE /api/branches/[branchId]/magazines/[magazineId]` (removes the `BranchMagazine` subscription only)
-- **"Delete magazine entirely"** — `DELETE /api/magazines/[id]` (removes the global magazine and cascades to all branch subscriptions and receipts)
+- **"Remove from this branch"** — `DELETE /api/branches/[branchId]/magazines/[magazineId]` (hard delete of the `BranchMagazine` record, not a soft delete)
+- **"Delete magazine entirely"** — `DELETE /api/magazines/[id]` (deletes all `BranchMagazine` records, then all `IssueReceipt` records, then the `Magazine` record — in that order to avoid foreign key constraint violations)
 
 ---
 
@@ -86,6 +88,8 @@ Users log in without selecting a branch, defaulting to Main. Staff may not reali
 
 Add a required branch dropdown to the login page, above the login button. No default is selected — the user must explicitly pick a branch. On successful login, the selected branch is set as the `epl-active-branch` cookie (same mechanism as `BranchSelector`).
 
+**Branch list fetching:** The login page is unauthenticated, so the branch list is fetched server-side in the login page's Server Component (direct Prisma query for active branches) and passed as props to the client form. No unauthenticated API endpoint is needed.
+
 The `BranchSelector` in the sidebar remains available for switching branches after login.
 
 ---
@@ -107,11 +111,14 @@ No user profile page exists. The sidebar user badge (name + role) is not clickab
 - User info display: name, email (read-only), role (read-only)
 - **Change name** form: text input + save button
 - **Change password** form: current password, new password, confirm new password + save button
+  - **Password validation:** minimum 8 characters. Confirm password mismatch is validated client-side (disable submit until match) and server-side (return 400 if mismatch).
 
 **API route:** `app/api/users/profile/route.ts`
 
-- `PUT` — accepts `{ name }` and/or `{ currentPassword, newPassword }`
-- Validates current password with bcrypt before allowing password change
+- `PUT` — supports two independent operations in a single request:
+  - Name update: `{ name: string }` — updates user name
+  - Password update: `{ currentPassword: string, newPassword: string }` — validates current password with bcrypt, enforces minimum 8 characters for new password
+  - Both can be sent together: `{ name, currentPassword, newPassword }`. Each field set is validated independently — a valid name update succeeds even if password fields are absent, and vice versa.
 - Updates the user record by ID — since `IssueReceipt` links by `receivedById` (foreign key), changing the user's name does not break any logs or receipts
 
 **Audit logging:** Log name changes and password changes (without logging actual password values).
@@ -134,11 +141,15 @@ The audit log page resolves IDs to names when rendering:
 
 The stored log entries (`logs/audit.log`) continue to use IDs for data integrity. Resolution happens at display time only.
 
+**Performance:** The log page is already paginated (or should be if not). ID resolution is done in bulk — collect all unique IDs from the visible page's entries, then query each entity type once (e.g., one `findMany` for all referenced user IDs). This avoids N+1 queries.
+
 ---
 
 ## Technical Notes
 
 - **No schema changes required.** All features use existing Prisma models (`Magazine`, `BranchMagazine`, `IssueReceipt`, `User`, `Branch`).
+- **Existing API fix:** `DELETE /api/magazines/[id]` must be updated to also delete `BranchMagazine` records before deleting the magazine (currently only deletes `IssueReceipt` records, which would cause a foreign key error).
+- **Existing API fix:** `DELETE /api/branches/[id]/magazines/[magazineId]` currently does a soft delete (`active: false`). Change to hard delete to match the "Remove from this branch" semantics.
 - **New shadcn component:** `Switch` (via `npx shadcn@latest add switch`)
 - **New routes:** `app/(dashboard)/profile/page.tsx`, `app/api/users/profile/route.ts`
 - **Modified routes:** `app/(dashboard)/admin/magazines/page.tsx`, `app/(auth)/login/page.tsx`
