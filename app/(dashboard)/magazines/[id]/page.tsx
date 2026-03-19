@@ -45,8 +45,12 @@ export default async function MagazineDetailPage({ params }: PageProps) {
     where: { id },
     include: {
       receipts: {
+        where: { branchId: activeBranchId },
         orderBy: { receivedDate: 'desc' },
-        include: { receivedBy: { select: { id: true, name: true } } },
+        include: {
+          receivedBy: { select: { id: true, name: true } },
+          branch: { select: { name: true, code: true } },
+        },
       },
     },
   })
@@ -122,7 +126,7 @@ export default async function MagazineDetailPage({ params }: PageProps) {
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mt-6 pt-6 border-t" style={{ borderColor: 'oklch(0.900 0.012 88)' }}>
           <div>
             <p className="text-xs font-medium uppercase tracking-wide mb-1" style={{ color: 'oklch(0.55 0.030 72)' }}>
-              Total Issues
+              Issues at Branch
             </p>
             <p className="text-2xl font-bold" style={{ fontFamily: 'var(--font-playfair)', color: 'oklch(0.15 0.028 62)' }}>
               {magazine.receipts.length}
@@ -171,6 +175,7 @@ export default async function MagazineDetailPage({ params }: PageProps) {
               <TableRow style={{ borderColor: 'oklch(0.876 0.016 88)', backgroundColor: 'oklch(0.963 0.012 91)' }}>
                 <TableHead className="font-semibold" style={{ color: 'oklch(0.30 0.028 62)' }}>#</TableHead>
                 <TableHead className="font-semibold" style={{ color: 'oklch(0.30 0.028 62)' }}>Date Received</TableHead>
+                <TableHead className="font-semibold" style={{ color: 'oklch(0.30 0.028 62)' }}>Branch</TableHead>
                 <TableHead className="font-semibold" style={{ color: 'oklch(0.30 0.028 62)' }}>Received By</TableHead>
                 <TableHead className="font-semibold" style={{ color: 'oklch(0.30 0.028 62)' }}>Notes</TableHead>
                 <TableHead className="font-semibold" style={{ color: 'oklch(0.30 0.028 62)' }}>Logged At</TableHead>
@@ -189,6 +194,11 @@ export default async function MagazineDetailPage({ params }: PageProps) {
                   <TableCell>
                     <span className="text-sm font-medium" style={{ color: 'oklch(0.20 0.028 62)' }}>
                       {fmt(receipt.receivedDate)}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-sm" style={{ color: 'oklch(0.35 0.028 62)' }}>
+                      {receipt.branch?.name ?? '—'}
                     </span>
                   </TableCell>
                   <TableCell>
