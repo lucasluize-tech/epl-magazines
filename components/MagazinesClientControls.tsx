@@ -2,10 +2,11 @@
 
 import { useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
-import type { MagazineWithStatus } from '@/types'
+import type { MagazineWithStatus, Branch } from '@/types'
 import { Button } from '@/components/ui/button'
-import { CalendarCheck, Filter } from 'lucide-react'
+import { CalendarCheck, Filter, SendHorizontal } from 'lucide-react'
 import MarkReceivedDialog from './MarkReceivedDialog'
+import TransferDialog from './TransferDialog'
 
 type FilterBarMode = {
   mode?: 'filter'
@@ -19,6 +20,8 @@ type RowActionsMode = {
   magazineId: string
   magazine: MagazineWithStatus
   activeBranchId: string
+  branches: Branch[]
+  senderQuantity: number
   currentFilter?: never
 }
 
@@ -69,8 +72,16 @@ function FilterBar({ currentFilter }: { currentFilter: string }) {
   )
 }
 
-function RowActions({ magazine, activeBranchId }: { magazine: MagazineWithStatus; activeBranchId: string }) {
+function RowActions({ magazine, activeBranchId, branches, senderQuantity }: {
+  magazine: MagazineWithStatus
+  activeBranchId: string
+  branches: Branch[]
+  senderQuantity: number
+}) {
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [transferOpen, setTransferOpen] = useState(false)
+  const otherBranches = branches.filter(b => b.id !== activeBranchId)
+
   return (
     <>
       <Button
@@ -81,11 +92,30 @@ function RowActions({ magazine, activeBranchId }: { magazine: MagazineWithStatus
       >
         <CalendarCheck size={12} /> Received
       </Button>
+      {senderQuantity > 0 && otherBranches.length > 0 && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 w-7 p-0"
+          onClick={() => setTransferOpen(true)}
+          title="Transfer"
+        >
+          <SendHorizontal size={13} style={{ color: 'oklch(0.45 0.082 156)' }} />
+        </Button>
+      )}
       <MarkReceivedDialog
         magazine={magazine}
         activeBranchId={activeBranchId}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
+      />
+      <TransferDialog
+        magazineName={magazine.name}
+        magazineId={magazine.id}
+        maxQuantity={senderQuantity}
+        availableBranches={otherBranches}
+        open={transferOpen}
+        onOpenChange={setTransferOpen}
       />
     </>
   )
@@ -93,7 +123,14 @@ function RowActions({ magazine, activeBranchId }: { magazine: MagazineWithStatus
 
 export default function MagazinesClientControls(props: MagazinesClientControlsProps) {
   if (props.mode === 'row-actions') {
-    return <RowActions magazine={props.magazine} activeBranchId={props.activeBranchId} />
+    return (
+      <RowActions
+        magazine={props.magazine}
+        activeBranchId={props.activeBranchId}
+        branches={props.branches}
+        senderQuantity={props.senderQuantity}
+      />
+    )
   }
   return <FilterBar currentFilter={props.currentFilter} />
 }

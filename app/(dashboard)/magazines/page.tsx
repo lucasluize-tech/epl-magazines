@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import type { MagazineWithStatus } from '@/types'
 import { verifySession } from '@/lib/dal'
 import db from '@/lib/db'
-import { resolveActiveBranchId } from '@/lib/branch'
+import { resolveActiveBranchId, getActiveBranches } from '@/lib/branch'
 import { computeNextExpectedDate, getMagazineStatus, CADENCE_LABELS } from '@/lib/cadence'
 import { format } from 'date-fns'
 import Link from 'next/link'
@@ -39,11 +39,14 @@ export default async function MagazinesPage({ searchParams }: PageProps) {
 
   const activeBranchId = await resolveActiveBranchId()
 
-  const branchSubscriptions = await db.branchMagazine.findMany({
+  const branches = await getActiveBranches()
+
+  const branchSubscriptionsFull = await db.branchMagazine.findMany({
     where: { branchId: activeBranchId, active: true },
-    select: { magazineId: true },
+    select: { magazineId: true, quantity: true },
   })
-  const subscribedMagazineIds = branchSubscriptions.map(s => s.magazineId)
+  const subscribedMagazineIds = branchSubscriptionsFull.map(s => s.magazineId)
+  const quantityMap = new Map(branchSubscriptionsFull.map(s => [s.magazineId, s.quantity]))
 
   const magazines = await db.magazine.findMany({
     where: {
@@ -114,7 +117,7 @@ export default async function MagazinesPage({ searchParams }: PageProps) {
                 <TableHead className="font-semibold" style={{ color: 'oklch(0.30 0.028 62)' }}>Name</TableHead>
                 <TableHead className="font-semibold" style={{ color: 'oklch(0.30 0.028 62)' }}>Cadence</TableHead>
                 <TableHead className="font-semibold" style={{ color: 'oklch(0.30 0.028 62)' }}>Status</TableHead>
-                <TableHead className="font-semibold" style={{ color: 'oklch(0.30 0.028 62)' }}>Total Issues</TableHead>
+                <TableHead className="font-semibold" style={{ color: 'oklch(0.30 0.028 62)' }}>Total Deliveries</TableHead>
                 <TableHead className="font-semibold" style={{ color: 'oklch(0.30 0.028 62)' }}>Last Received</TableHead>
                 <TableHead className="font-semibold" style={{ color: 'oklch(0.30 0.028 62)' }}>Next Expected</TableHead>
                 <TableHead className="font-semibold text-right" style={{ color: 'oklch(0.30 0.028 62)' }}>Actions</TableHead>
@@ -129,12 +132,13 @@ export default async function MagazinesPage({ searchParams }: PageProps) {
                 >
                   <TableCell>
                     <div>
-                      <p
-                        className="font-medium"
+                      <Link
+                        href={`/magazines/${mag.id}`}
+                        className="font-medium hover:underline"
                         style={{ fontFamily: 'var(--font-playfair)', color: 'oklch(0.15 0.028 62)' }}
                       >
                         {mag.name}
-                      </p>
+                      </Link>
                       {mag.notes && (
                         <p className="text-xs mt-0.5 truncate max-w-xs" style={{ color: 'oklch(0.55 0.030 72)' }}>
                           {mag.notes}
@@ -180,16 +184,7 @@ export default async function MagazinesPage({ searchParams }: PageProps) {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <MagazinesClientControls magazineId={mag.id} magazine={mag} mode="row-actions" activeBranchId={activeBranchId} />
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-xs"
-                        nativeButton={false}
-                        render={<Link href={`/magazines/${mag.id}`} />}
-                      >
-                        History
-                      </Button>
+                      <MagazinesClientControls magazineId={mag.id} magazine={mag} mode="row-actions" activeBranchId={activeBranchId} branches={branches} senderQuantity={quantityMap.get(mag.id) ?? 0} />
                     </div>
                   </TableCell>
                 </TableRow>
