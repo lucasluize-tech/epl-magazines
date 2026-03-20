@@ -15,7 +15,10 @@ model User {
   role         Role           @default(STAFF)
   active       Boolean        @default(true)
   createdAt    DateTime       @default(now())
-  receipts     IssueReceipt[]
+  receipts             IssueReceipt[]
+  transfersInitiated   Transfer[]     @relation("TransferInitiated")
+  transfersCompleted   Transfer[]     @relation("TransferCompleted")
+  transfersCancelled   Transfer[]     @relation("TransferCancelled")
 }
 
 enum Role {
@@ -33,6 +36,7 @@ model Magazine {
   updatedAt DateTime         @updatedAt
   receipts  IssueReceipt[]
   branches  BranchMagazine[]
+  transfers Transfer[]
 }
 
 enum Cadence {
@@ -43,6 +47,12 @@ enum Cadence {
   SEASONAL
 }
 
+enum TransferStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
 model Branch {
   id        String            @id @default(cuid())
   name      String
@@ -50,7 +60,9 @@ model Branch {
   active    Boolean           @default(true)
   createdAt DateTime          @default(now())
   magazines BranchMagazine[]
-  receipts  IssueReceipt[]
+  receipts      IssueReceipt[]
+  transfersFrom Transfer[]     @relation("TransferFrom")
+  transfersTo   Transfer[]     @relation("TransferTo")
 }
 
 model BranchMagazine {
@@ -77,4 +89,25 @@ model IssueReceipt {
   receivedDate DateTime @default(now())
   notes        String?
   createdAt    DateTime @default(now())
+}
+
+model Transfer {
+  id             String         @id @default(cuid())
+  magazine       Magazine       @relation(fields: [magazineId], references: [id])
+  magazineId     String
+  fromBranch     Branch         @relation("TransferFrom", fields: [fromBranchId], references: [id])
+  fromBranchId   String
+  toBranch       Branch         @relation("TransferTo", fields: [toBranchId], references: [id])
+  toBranchId     String
+  quantity       Int
+  status         TransferStatus @default(PENDING)
+  initiatedBy    User           @relation("TransferInitiated", fields: [initiatedById], references: [id])
+  initiatedById  String
+  completedBy    User?          @relation("TransferCompleted", fields: [completedById], references: [id])
+  completedById  String?
+  cancelledBy    User?          @relation("TransferCancelled", fields: [cancelledById], references: [id])
+  cancelledById  String?
+  createdAt      DateTime       @default(now())
+  completedAt    DateTime?
+  cancelledAt    DateTime?
 }
