@@ -1,12 +1,13 @@
 import type { Metadata } from 'next'
 import type { LucideIcon } from 'lucide-react'
-import type { MagazineStatus, MagazineWithStatus } from '@/types'
+import type { DashboardStatus, MagazineWithStatus, TransferWithDetails } from '@/types'
 import { verifySession } from '@/lib/dal'
 import db from '@/lib/db'
 import { resolveActiveBranchId } from '@/lib/branch'
-import { computeNextExpectedDate, getMagazineStatus } from '@/lib/cadence'
+import { computeNextExpectedDate, isOverdue, isExpectedThisWeek } from '@/lib/cadence'
 import MagazineCard from '@/components/MagazineCard'
-import { AlertTriangle, Clock, CalendarCheck, BookOpen } from 'lucide-react'
+import TransferCard from '@/components/TransferCard'
+import { AlertTriangle, Clock, BookOpen } from 'lucide-react'
 
 export const metadata: Metadata = { title: 'Dashboard — EPL Magazine Tracker' }
 
@@ -19,54 +20,62 @@ interface SectionConfig {
   border: string
 }
 
-const SECTION_CONFIG: Record<MagazineStatus, SectionConfig> = {
-  overdue: {
-    label: 'Overdue / Missing',
-    description: 'These issues are past their expected delivery date',
-    icon: AlertTriangle,
-    color: 'oklch(0.56 0.225 27)',
-    bg: 'oklch(0.97 0.020 27)',
-    border: 'oklch(0.88 0.08 27)',
-  },
+const SECTION_CONFIG: Record<DashboardStatus, SectionConfig> = {
   this_week: {
     label: 'Expected This Week',
-    description: 'Due to arrive within the next 7 days',
+    description: 'Due within the current week (Sun–Sat)',
     icon: Clock,
     color: 'oklch(0.55 0.15 78)',
     bg: 'oklch(0.97 0.022 85)',
     border: 'oklch(0.88 0.08 78)',
   },
-  upcoming: {
-    label: 'Upcoming',
-    description: 'Scheduled for more than a week from now',
-    icon: CalendarCheck,
-    color: 'oklch(0.45 0.10 155)',
-    bg: 'oklch(0.97 0.012 155)',
-    border: 'oklch(0.88 0.04 155)',
-  },
-  never_received: {
-    label: 'Never Received',
-    description: 'No receipt on record — status unknown',
-    icon: BookOpen,
-    color: 'oklch(0.50 0.035 72)',
-    bg: 'oklch(0.95 0.012 88)',
-    border: 'oklch(0.876 0.016 88)',
+  overdue: {
+    label: 'Overdue',
+    description: 'Past their expected delivery date',
+    icon: AlertTriangle,
+    color: 'oklch(0.56 0.225 27)',
+    bg: 'oklch(0.97 0.020 27)',
+    border: 'oklch(0.88 0.08 27)',
   },
 }
 
-type Buckets = Record<MagazineStatus, MagazineWithStatus[]>
+const BUCKET_ORDER: DashboardStatus[] = ['this_week', 'overdue']
+
+type Buckets = Record<DashboardStatus, MagazineWithStatus[]>
 
 export default async function DashboardPage() {
   await verifySession()
 
   const activeBranchId = await resolveActiveBranchId()
 
+  // Fetch branch name for title
+  const currentBranch = await db.branch.findUnique({
+    where: { id: activeBranchId },
+    select: { name: true },
+  })
+
+  // Fetch pending incoming transfers for this branch
+  const pendingTransfers = await db.transfer.findMany({
+    where: { toBranchId: activeBranchId, status: 'PENDING' },
+    include: {
+      magazine: { select: { name: true } },
+      fromBranch: { select: { name: true, code: true } },
+      toBranch: { select: { name: true, code: true } },
+      initiatedBy: { select: { name: true } },
+      completedBy: { select: { name: true } },
+      cancelledBy: { select: { name: true } },
+    },
+  }) as TransferWithDetails[]
+
+  // Magazine IDs that have pending transfers — suppress their subscription cards
+  const suppressedMagazineIds = new Set(pendingTransfers.map((t) => t.magazineId))
+
   // Get magazine IDs subscribed at this branch
   const branchSubscriptions = await db.branchMagazine.findMany({
     where: { branchId: activeBranchId, active: true },
     select: { magazineId: true },
   })
-  const subscribedMagazineIds = branchSubscriptions.map(s => s.magazineId)
+  const subscribedMagazineIds = branchSubscriptions.map((s) => s.magazineId)
 
   // Fetch only those magazines with branch-specific receipts
   const magazines = await db.magazine.findMany({
@@ -85,28 +94,30 @@ export default async function DashboardPage() {
     orderBy: { name: 'asc' },
   })
 
-  const processed: MagazineWithStatus[] = magazines.map((mag) => {
-    const lastReceipt = mag.receipts[0] ?? null
-    const lastReceivedDate = lastReceipt?.receivedDate ?? null
-    const nextExpectedDate = computeNextExpectedDate(lastReceivedDate, mag.cadence)
-    const status = getMagazineStatus(lastReceivedDate, mag.cadence)
-    return {
-      ...mag,
-      lastReceivedDate,
-      nextExpectedDate,
-      status,
-    }
-  })
+  const processed = magazines
+    .filter((mag) => !suppressedMagazineIds.has(mag.id))
+    .map((mag) => {
+      const lastReceipt = mag.receipts[0] ?? null
+      const lastReceivedDate = lastReceipt?.receivedDate ?? null
+      const nextExpectedDate = computeNextExpectedDate(lastReceivedDate, mag.cadence)
+      const status = isOverdue(nextExpectedDate)
+        ? 'overdue' as const
+        : isExpectedThisWeek(nextExpectedDate)
+          ? 'this_week' as const
+          : null
+      if (!status) return null
+      const { receipts: _receipts, ...rest } = mag
+      return { ...rest, lastReceivedDate, nextExpectedDate, status } as MagazineWithStatus
+    })
+    .filter((m): m is MagazineWithStatus => m !== null)
 
   const buckets: Buckets = {
-    overdue: processed.filter((m) => m.status === 'overdue'),
     this_week: processed.filter((m) => m.status === 'this_week'),
-    upcoming: processed.filter((m) => m.status === 'upcoming'),
-    never_received: processed.filter((m) => m.status === 'never_received'),
+    overdue: processed.filter((m) => m.status === 'overdue'),
   }
 
-  const totalActive = processed.length
   const totalOverdue = buckets.overdue.length
+  const totalThisWeek = buckets.this_week.length + pendingTransfers.length
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
@@ -117,22 +128,33 @@ export default async function DashboardPage() {
           style={{ fontFamily: 'var(--font-playfair)', color: 'oklch(0.15 0.028 62)' }}
         >
           Magazine Dashboard
+          {currentBranch && (
+            <span style={{ color: 'oklch(0.50 0.035 72)' }}> {currentBranch.name}</span>
+          )}
         </h1>
         <p style={{ color: 'oklch(0.50 0.035 72)' }}>
-          {totalActive} active magazine{totalActive !== 1 ? 's' : ''}
+          {totalThisWeek} expected this week
           {totalOverdue > 0 && (
             <span style={{ color: 'oklch(0.56 0.225 27)' }}>
-              {' '}· {totalOverdue} overdue
+              {' '}&middot; {totalOverdue} overdue
+            </span>
+          )}
+          {pendingTransfers.length > 0 && (
+            <span style={{ color: 'oklch(0.45 0.15 250)' }}>
+              {' '}&middot; {pendingTransfers.length} incoming transfer{pendingTransfers.length !== 1 ? 's' : ''}
             </span>
           )}
         </p>
       </div>
 
       {/* Summary pills */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-10">
-        {(Object.entries(buckets) as [MagazineStatus, MagazineWithStatus[]][]).map(([status, items]) => {
+      <div className="grid grid-cols-2 gap-3 mb-10">
+        {BUCKET_ORDER.map((status) => {
           const cfg = SECTION_CONFIG[status]
           const Icon = cfg.icon
+          const count = status === 'this_week'
+            ? buckets[status].length + pendingTransfers.length
+            : buckets[status].length
           return (
             <div
               key={status}
@@ -142,7 +164,7 @@ export default async function DashboardPage() {
               <div className="flex items-center gap-2 mb-0.5">
                 <Icon size={14} style={{ color: cfg.color }} />
                 <span className="text-xs font-medium" style={{ color: cfg.color }}>
-                  {items.length}
+                  {count}
                 </span>
               </div>
               <p className="text-xs" style={{ color: 'oklch(0.50 0.035 72)' }}>
@@ -155,10 +177,13 @@ export default async function DashboardPage() {
 
       {/* Status sections */}
       <div className="space-y-10">
-        {(Object.entries(buckets) as [MagazineStatus, MagazineWithStatus[]][]).map(([status, items]) => {
-          if (items.length === 0) return null
+        {BUCKET_ORDER.map((status) => {
+          const items = buckets[status]
+          const transfers = status === 'this_week' ? pendingTransfers : []
+          if (items.length === 0 && transfers.length === 0) return null
           const cfg = SECTION_CONFIG[status]
           const Icon = cfg.icon
+          const totalCount = items.length + transfers.length
           return (
             <section key={status}>
               <div className="flex items-center gap-2 mb-4">
@@ -174,11 +199,8 @@ export default async function DashboardPage() {
                     style={{ fontFamily: 'var(--font-playfair)', color: 'oklch(0.15 0.028 62)' }}
                   >
                     {cfg.label}
-                    <span
-                      className="ml-2 text-sm font-normal"
-                      style={{ color: cfg.color }}
-                    >
-                      ({items.length})
+                    <span className="ml-2 text-sm font-normal" style={{ color: cfg.color }}>
+                      ({totalCount})
                     </span>
                   </h2>
                   <p className="text-xs" style={{ color: 'oklch(0.55 0.030 72)' }}>
@@ -188,6 +210,9 @@ export default async function DashboardPage() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {transfers.map((t) => (
+                  <TransferCard key={t.id} transfer={t} />
+                ))}
                 {items.map((magazine) => (
                   <MagazineCard key={magazine.id} magazine={magazine} activeBranchId={activeBranchId} />
                 ))}
@@ -196,13 +221,13 @@ export default async function DashboardPage() {
           )
         })}
 
-        {processed.length === 0 && (
+        {processed.length === 0 && pendingTransfers.length === 0 && (
           <div className="text-center py-20" style={{ color: 'oklch(0.60 0.025 72)' }}>
             <BookOpen size={40} className="mx-auto mb-4 opacity-30" />
             <p className="text-lg font-medium" style={{ fontFamily: 'var(--font-playfair)' }}>
-              No magazines yet
+              No magazines expected right now
             </p>
-            <p className="text-sm mt-1">Ask an administrator to add magazines to the collection.</p>
+            <p className="text-sm mt-1">Check back when deliveries are due this week.</p>
           </div>
         )}
       </div>
