@@ -2,16 +2,29 @@
 
 import { useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
+import type { Branch } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Eye, EyeOff, LogIn, Loader2 } from 'lucide-react'
 
-export default function LoginForm() {
+export interface LoginFormProps {
+  branches: Branch[]
+}
+
+export default function LoginForm({ branches }: LoginFormProps) {
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [branchId, setBranchId] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -19,6 +32,12 @@ export default function LoginForm() {
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError('')
+
+    if (!branchId) {
+      setError('Please select a branch')
+      return
+    }
+
     setLoading(true)
 
     try {
@@ -34,6 +53,9 @@ export default function LoginForm() {
         setError(data.error || 'Something went wrong')
         return
       }
+
+      // Set the branch cookie (same mechanism as BranchSelector)
+      document.cookie = `epl-active-branch=${branchId}; path=/; max-age=${365 * 24 * 60 * 60}`
 
       router.push('/dashboard')
       router.refresh()
@@ -91,6 +113,22 @@ export default function LoginForm() {
             {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
           </button>
         </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="branch" style={{ color: 'oklch(0.30 0.028 62)' }}>
+          Branch
+        </Label>
+        <Select value={branchId} onValueChange={setBranchId}>
+          <SelectTrigger id="branch" className="h-11">
+            <SelectValue placeholder="Select your branch…" />
+          </SelectTrigger>
+          <SelectContent>
+            {branches.map((b) => (
+              <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <Button

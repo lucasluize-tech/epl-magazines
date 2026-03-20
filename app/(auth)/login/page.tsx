@@ -1,9 +1,17 @@
 import type { Metadata } from 'next'
+import db from '@/lib/db'
 import LoginForm from '@/components/LoginForm'
+import type { Branch } from '@/types'
 
 export const metadata: Metadata = { title: 'Sign In — EPL Magazine Tracker' }
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  const branches = await db.branch.findMany({
+    where: { active: true },
+    orderBy: { name: 'asc' },
+    select: { id: true, name: true, code: true, active: true, createdAt: true },
+  }) as Branch[]
+
   return (
     <div className="min-h-screen flex">
       {/* Left panel — library identity */}
@@ -34,7 +42,7 @@ export default function LoginPage() {
 
         <div className="border-t pt-8" style={{ borderColor: 'oklch(0.30 0.055 158)' }}>
           <p className="text-sm italic" style={{ color: 'oklch(0.62 0.025 155)' }}>
-            "A library is not a luxury but one of the necessities of life."
+            &quot;A library is not a luxury but one of the necessities of life.&quot;
           </p>
           <p className="text-xs mt-2" style={{ color: 'oklch(0.50 0.025 155)' }}>
             — Henry Ward Beecher
@@ -68,7 +76,7 @@ export default function LoginPage() {
             Sign in to manage the magazine collection
           </p>
 
-          <LoginForm />
+          <LoginForm branches={branches} />
         </div>
       </div>
     </div>
