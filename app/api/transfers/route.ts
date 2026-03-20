@@ -11,6 +11,43 @@ interface InitiateTransferBody {
 }
 
 /**
+ * GET /api/transfers
+ * Lists transfers. Filterable by status and branchId query params.
+ * branchId matches transfers where fromBranchId OR toBranchId equals the value.
+ */
+export async function GET(request: NextRequest): Promise<Response> {
+  try {
+    await verifySession()
+    const { searchParams } = request.nextUrl
+    const status = searchParams.get('status')
+    const branchId = searchParams.get('branchId')
+
+    const where: Record<string, unknown> = {}
+    if (status) where.status = status
+    if (branchId) {
+      where.OR = [{ fromBranchId: branchId }, { toBranchId: branchId }]
+    }
+
+    const transfers = await db.transfer.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        magazine: { select: { name: true } },
+        fromBranch: { select: { name: true, code: true } },
+        toBranch: { select: { name: true, code: true } },
+        initiatedBy: { select: { name: true } },
+        completedBy: { select: { name: true } },
+        cancelledBy: { select: { name: true } },
+      },
+    })
+
+    return Response.json(transfers)
+  } catch {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+}
+
+/**
  * POST /api/transfers
  * Initiates a branch-to-branch magazine transfer.
  * fromBranchId is resolved from the active branch cookie.
