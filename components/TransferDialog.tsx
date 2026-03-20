@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import type { Branch } from '@/types'
@@ -48,6 +48,14 @@ export default function TransferDialog({
   const [toBranchId, setToBranchId] = useState('')
   const [quantity, setQuantity] = useState(1)
   const [submitting, setSubmitting] = useState(false)
+
+  // Reset state when dialog opens for a different magazine
+  const prevMagazineId = useRef(magazineId)
+  if (prevMagazineId.current !== magazineId) {
+    prevMagazineId.current = magazineId
+    setToBranchId('')
+    setQuantity(1)
+  }
 
   async function handleSubmit() {
     if (!toBranchId) {
