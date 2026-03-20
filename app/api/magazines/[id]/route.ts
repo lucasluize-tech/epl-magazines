@@ -77,7 +77,8 @@ export async function DELETE(_request: NextRequest, { params }: RouteContext): P
 
     const { id } = await params
 
-    // Delete receipts first (cascading)
+    // Delete related records first (manual cascade)
+    await db.branchMagazine.deleteMany({ where: { magazineId: id } })
     await db.issueReceipt.deleteMany({ where: { magazineId: id } })
     const magazine = await db.magazine.delete({ where: { id } })
 

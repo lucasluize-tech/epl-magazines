@@ -51,7 +51,7 @@ export async function PUT(request: NextRequest, { params }: RouteContext): Promi
 
 /**
  * DELETE /api/branches/[id]/magazines/[magazineId]
- * Removes a magazine subscription from a branch (soft delete: sets active=false). ADMIN only.
+ * Removes a magazine subscription from a branch (hard delete). ADMIN only.
  */
 export async function DELETE(_request: NextRequest, { params }: RouteContext): Promise<Response> {
   try {
@@ -62,9 +62,8 @@ export async function DELETE(_request: NextRequest, { params }: RouteContext): P
 
     const { id, magazineId } = await params
 
-    await db.branchMagazine.update({
+    await db.branchMagazine.delete({
       where: { branchId_magazineId: { branchId: id, magazineId } },
-      data: { active: false },
     })
 
     auditLog(session.userId, 'BRANCH_MAGAZINE_REMOVED', {
