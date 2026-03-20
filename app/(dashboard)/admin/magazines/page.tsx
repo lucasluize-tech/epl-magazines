@@ -108,6 +108,7 @@ export default async function AdminMagazinesPage({ searchParams }: PageProps) {
         branchId={branchId}
         page={page}
         totalPages={totalPages}
+        branches={branches}
       />
     </div>
   )

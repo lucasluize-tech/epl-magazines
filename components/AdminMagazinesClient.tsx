@@ -4,8 +4,8 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
-import type { BranchMagazineWithDetails } from '@/types'
-import { Plus, Pencil, Trash2, BookMarked } from 'lucide-react'
+import type { BranchMagazineWithDetails, Branch } from '@/types'
+import { Plus, Pencil, Trash2, BookMarked, SendHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
@@ -16,19 +16,22 @@ import { CADENCE_LABELS } from '@/lib/cadence'
 import CreateMagazineDialog from './CreateMagazineDialog'
 import EditMagazineDialog from './EditMagazineDialog'
 import AdminMagazineDeleteDialog from './AdminMagazineDeleteDialog'
+import TransferDialog from './TransferDialog'
 
 export interface AdminMagazinesClientProps {
   magazines: BranchMagazineWithDetails[]
   branchId: string
   page: number
   totalPages: number
+  branches: Branch[]
 }
 
-export default function AdminMagazinesClient({ magazines, branchId, page, totalPages }: AdminMagazinesClientProps) {
+export default function AdminMagazinesClient({ magazines, branchId, page, totalPages, branches }: AdminMagazinesClientProps) {
   const router = useRouter()
   const [createOpen, setCreateOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<BranchMagazineWithDetails | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<BranchMagazineWithDetails | null>(null)
+  const [transferTarget, setTransferTarget] = useState<BranchMagazineWithDetails | null>(null)
   const [togglingId, setTogglingId] = useState<string | null>(null)
 
   async function toggleActive(sub: BranchMagazineWithDetails) {
@@ -101,7 +104,7 @@ export default function AdminMagazinesClient({ magazines, branchId, page, totalP
           <Table>
             <TableHeader>
               <TableRow style={{ borderColor: 'oklch(0.876 0.016 88)', backgroundColor: 'oklch(0.963 0.012 91)' }}>
-                {['Name', 'Cadence', 'Qty', 'Total Issues', 'Last Received', 'Next Expected', 'Status', 'Notes', 'Actions'].map((h) => (
+                {['Name', 'Cadence', 'Qty', 'Total Deliveries', 'Last Received', 'Next Expected', 'Notes', 'Status', 'Actions'].map((h) => (
                   <TableHead
                     key={h}
                     className={`font-semibold ${h === 'Actions' ? 'text-right' : ''}`}
@@ -168,6 +171,11 @@ export default function AdminMagazinesClient({ magazines, branchId, page, totalP
                     </span>
                   </TableCell>
                   <TableCell>
+                    <span className="text-sm italic" style={{ color: 'oklch(0.55 0.030 72)' }}>
+                      {sub.magazine.notes || '—'}
+                    </span>
+                  </TableCell>
+                  <TableCell>
                     <Switch
                       checked={sub.active}
                       onCheckedChange={() => toggleActive(sub)}
@@ -175,12 +183,17 @@ export default function AdminMagazinesClient({ magazines, branchId, page, totalP
                     />
                   </TableCell>
                   <TableCell>
-                    <span className="text-sm italic" style={{ color: 'oklch(0.55 0.030 72)' }}>
-                      {sub.magazine.notes || '—'}
-                    </span>
-                  </TableCell>
-                  <TableCell>
                     <div className="flex items-center justify-end gap-1.5">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 w-7 p-0"
+                        onClick={() => setTransferTarget(sub)}
+                        title="Transfer"
+                        disabled={sub.quantity < 1}
+                      >
+                        <SendHorizontal size={14} style={{ color: 'oklch(0.45 0.082 156)' }} />
+                      </Button>
                       <Button
                         size="sm"
                         variant="ghost"
@@ -243,6 +256,17 @@ export default function AdminMagazinesClient({ magazines, branchId, page, totalP
           branchId={branchId}
           open={!!editTarget}
           onOpenChange={(v) => { if (!v) setEditTarget(null) }}
+        />
+      )}
+
+      {transferTarget && (
+        <TransferDialog
+          magazineName={transferTarget.magazine.name}
+          magazineId={transferTarget.magazineId}
+          maxQuantity={transferTarget.quantity}
+          availableBranches={branches.filter(b => b.id !== branchId)}
+          open={!!transferTarget}
+          onOpenChange={(v) => { if (!v) setTransferTarget(null) }}
         />
       )}
 
