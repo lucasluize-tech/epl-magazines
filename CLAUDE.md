@@ -325,6 +325,7 @@ npx prisma studio    # Visual DB browser
 npx prisma migrate dev --name <name>   # Create and run migration
 npx prisma generate  # Regenerate Prisma client after schema change
 npx prisma migrate reset --force       # Reset DB + reseed (requires user consent, see Gotchas)
+rm prisma/dev.db && npx prisma migrate dev && npm run seed  # Full reset (delete + recreate + seed)
 ```
 
 ---
@@ -351,14 +352,17 @@ The singleton lives in `lib/db.ts`. Config is in `prisma.config.ts` (TypeScript,
 - All data mutations via **Server Actions** or API route handlers — no client-side fetch for mutations
 - Use `date-fns` for all date arithmetic (already a Next.js ecosystem staple)
 - shadcn/ui components live in `components/ui/` — add with `npx shadcn@latest add <component>`
+- Audit log changes with before/after values: fetch record before update, log `field: old → new` (not just field names)
 
 ---
 
 ## Gotchas
 
 - `proxy.ts` is Next.js Edge middleware (alternative to `middleware.ts`) — cannot import `server-only` modules or `cookies()` from `next/headers`; use `request.cookies` and inline Edge-compatible code
-- Winston: use `logger.info('message', { ...data })` not `logger.info({ ...data })` — the latter nests payload under `message` key
+- Winston: use `logger.info({ ...data })` not `logger.info('string', { ...data })` — the latter adds a redundant `"message"` field to the JSON output
 - Base UI Button with `render={<Link>}`: must set `nativeButton={false}` to avoid console warnings
+- Base UI Select: `<SelectValue>` renders the raw `value` (e.g. cuid), not the label. Must render children: `<SelectValue>{displayText}</SelectValue>`
 - `tsx prisma/seed.ts` doesn't auto-load `.env.local` — seed script needs `import 'dotenv/config'`
 - After editing `proxy.ts`, delete `.next/` cache for changes to take effect in dev
+- After merging a worktree branch, run `npx prisma generate` — the generated client doesn't carry over from worktrees
 - Prisma v7 AI safety gate: `prisma migrate reset` and other destructive commands fail when invoked by AI agents. Must set `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION` env var with the user's exact consent message. Always ask the user first.
