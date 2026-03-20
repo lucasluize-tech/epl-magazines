@@ -29,15 +29,28 @@ export async function PUT(request: NextRequest, { params }: RouteContext): Promi
     if (body.quantity !== undefined) validFields.quantity = body.quantity
     if (body.active !== undefined) validFields.active = body.active
 
+    const before = await db.branchMagazine.findUnique({
+      where: { branchId_magazineId: { branchId: id, magazineId } },
+      include: { magazine: { select: { name: true } }, branch: { select: { name: true } } },
+    })
+    if (!before) return Response.json({ error: 'Subscription not found' }, { status: 404 })
+
     const subscription = await db.branchMagazine.update({
       where: { branchId_magazineId: { branchId: id, magazineId } },
       data: validFields,
     })
 
+    const changes = Object.entries(validFields)
+      .filter(([k]) => String(before[k as keyof typeof before]) !== String(validFields[k as keyof typeof validFields]))
+      .map(([k, v]) => `${k}: ${before[k as keyof typeof before]} → ${v}`)
+      .join(', ')
+
     auditLog(session.userId, 'BRANCH_MAGAZINE_UPDATED', {
       branchId: id,
       magazineId,
-      changes: Object.keys(validFields).join(','),
+      magazineName: before.magazine.name,
+      branchName: before.branch.name,
+      changes: changes || 'no changes',
     })
 
     return Response.json(subscription)

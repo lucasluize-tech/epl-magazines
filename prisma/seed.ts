@@ -6,10 +6,143 @@ import { PrismaClient } from '../generated/prisma/client'
 const adapter = new PrismaBetterSqlite3({ url: process.env['DATABASE_URL']! })
 const db = new PrismaClient({ adapter })
 
+/**
+ * Magazine seed data.
+ * Branches: ML = Main Library, NE = North Edison, CB = Clara Barton.
+ * Default quantity is 1 per branch unless specified with (N).
+ */
+interface MagSeed {
+  name: string
+  cadence: 'WEEKLY' | 'BI_WEEKLY' | 'MONTHLY' | 'BI_MONTHLY' | 'SEASONAL'
+  branches: { code: string; qty: number }[]
+}
+
+// Helper: parse branch string like "ML,NE,CB" or "ML(2),NE(2),CB(1)"
+function parseBranches(s: string): { code: string; qty: number }[] {
+  return s.split(',').map((part) => {
+    const match = part.match(/^(\w+)\((\d+)\)$/)
+    if (match) return { code: match[1], qty: parseInt(match[2], 10) }
+    return { code: part, qty: 1 }
+  })
+}
+
+// Branch code mapping: spreadsheet abbreviation → DB code
+const BRANCH_MAP: Record<string, string> = { ML: 'MAIN', NE: 'NORTH', CB: 'CB' }
+
+const MAGAZINES: MagSeed[] = [
+  { name: 'AARP Bulletin', cadence: 'BI_MONTHLY', branches: parseBranches('ML') },
+  { name: 'AARP The Magazine', cadence: 'BI_MONTHLY', branches: parseBranches('ML') },
+  { name: 'All Recipes Magazine', cadence: 'BI_MONTHLY', branches: parseBranches('ML') },
+  { name: 'American Association of Retired Persons Membership', cadence: 'MONTHLY', branches: parseBranches('ML') },
+  { name: 'Ananda Vikatan', cadence: 'WEEKLY', branches: parseBranches('ML,NE') },
+  { name: 'Architectural Digest', cadence: 'MONTHLY', branches: parseBranches('ML,NE') },
+  { name: 'Artists Magazine', cadence: 'MONTHLY', branches: parseBranches('ML,NE') },
+  { name: 'Ask', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Astronomy', cadence: 'MONTHLY', branches: parseBranches('ML,NE') },
+  { name: 'Atlantic Monthly', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Babybug', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Better Homes and Gardens', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Bon Appetit', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Car and Driver', cadence: 'MONTHLY', branches: parseBranches('ML,NE') },
+  { name: 'China Today - Chinese Ed', cadence: 'MONTHLY', branches: parseBranches('ML,NE') },
+  { name: 'Chirp', cadence: 'MONTHLY', branches: parseBranches('ML,NE') },
+  { name: 'Consumer Reports', cadence: 'MONTHLY', branches: parseBranches('ML(2),NE(2),CB(1)') },
+  { name: 'Consumer Reports Buying Guide - Online', cadence: 'MONTHLY', branches: parseBranches('ML') },
+  { name: 'Cooks Illustrated', cadence: 'BI_MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Cosmopolitan', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Country Living', cadence: 'MONTHLY', branches: parseBranches('ML,NE') },
+  { name: 'Crossword Puzzles Only', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Discover', cadence: 'BI_MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Economist', cadence: 'WEEKLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Elle - American Ed', cadence: 'MONTHLY', branches: parseBranches('ML') },
+  { name: 'Entrepreneur', cadence: 'MONTHLY', branches: parseBranches('ML,NE') },
+  { name: 'Esquire', cadence: 'BI_MONTHLY', branches: parseBranches('ML,NE') },
+  { name: 'Essence', cadence: 'BI_MONTHLY', branches: parseBranches('ML,NE') },
+  { name: 'Family Handyman', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Family Tree Magazine', cadence: 'BI_MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Fine Gardening', cadence: 'BI_MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'First for Women', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Food Network Magazine', cadence: 'BI_MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Food & Wine', cadence: 'MONTHLY', branches: parseBranches('ML') },
+  { name: 'Forbes', cadence: 'BI_WEEKLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Fortune - Domestic Ed', cadence: 'MONTHLY', branches: parseBranches('ML,NE') },
+  { name: 'Fun for Kidz', cadence: 'BI_MONTHLY', branches: parseBranches('ML,NE') },
+  { name: 'Golf Digest', cadence: 'MONTHLY', branches: parseBranches('ML,NE') },
+  { name: 'Good Housekeeping', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'GQ - US Edition', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Harpers Bazaar', cadence: 'MONTHLY', branches: parseBranches('ML,NE') },
+  { name: 'Harvard Business Review', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Harvard Health Letter', cadence: 'MONTHLY', branches: parseBranches('ML,NE') },
+  { name: 'HGTV Magazine', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Highlights for Children', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Highlights High Five', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Hockey News', cadence: 'MONTHLY', branches: parseBranches('ML,NE') },
+  { name: 'Home & Design Magazine', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'House Beautiful', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Humpty Dumpty Magazine', cadence: 'BI_MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Inc', cadence: 'MONTHLY', branches: parseBranches('ML,NE') },
+  { name: 'Inc 500', cadence: 'MONTHLY', branches: parseBranches('ML') },
+  { name: 'Kiplingers Personal Finance', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Ladybug', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Library Journal', cadence: 'MONTHLY', branches: parseBranches('ML') },
+  { name: 'Magnolia Journal', cadence: 'SEASONAL', branches: parseBranches('ML') },
+  { name: 'Make', cadence: 'BI_MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Mens Health', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Mother Earth News', cadence: 'BI_MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Muse', cadence: 'MONTHLY', branches: parseBranches('ML,NE') },
+  { name: 'National Geographic', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'National Geographic History', cadence: 'BI_MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'National Geographic Kids', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'National Geographic Little Kids', cadence: 'BI_MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'New Jersey Monthly', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'New York', cadence: 'BI_WEEKLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'New Yorker', cadence: 'WEEKLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Out', cadence: 'BI_MONTHLY', branches: parseBranches('ML,NE') },
+  { name: 'Pastel Journal', cadence: 'BI_MONTHLY', branches: parseBranches('ML,NE') },
+  { name: 'People', cadence: 'WEEKLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Pioneer Woman', cadence: 'SEASONAL', branches: parseBranches('ML,NE,CB') },
+  { name: 'Poetry', cadence: 'MONTHLY', branches: parseBranches('ML,NE') },
+  { name: 'Poets & Writers Magazine', cadence: 'BI_MONTHLY', branches: parseBranches('ML,NE') },
+  { name: 'Popular Mechanics', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Prevention', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Psychology Today', cadence: 'BI_MONTHLY', branches: parseBranches('ML,NE') },
+  { name: 'Publishers Weekly', cadence: 'WEEKLY', branches: parseBranches('ML') },
+  { name: 'Ranger Rick', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Ranger Rick Jr', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Readers Digest - US Ed', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Readers Digest - Large Print', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Real Simple', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Runners World', cadence: 'MONTHLY', branches: parseBranches('ML,NE') },
+  { name: 'School Library Journal', cadence: 'MONTHLY', branches: parseBranches('ML') },
+  { name: 'Science News', cadence: 'BI_WEEKLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Scientific American', cadence: 'MONTHLY', branches: parseBranches('ML,NE') },
+  { name: 'Scout Life', cadence: 'MONTHLY', branches: parseBranches('ML,NE') },
+  { name: 'Series Made Simple', cadence: 'MONTHLY', branches: parseBranches('ML') },
+  { name: 'Smithsonian', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Spider', cadence: 'MONTHLY', branches: parseBranches('ML,NE') },
+  { name: 'Sports Illustrated', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Sports Illustrated Kids', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Taste of Home', cadence: 'BI_MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Threads', cadence: 'BI_MONTHLY', branches: parseBranches('ML,NE') },
+  { name: 'Time Magazine', cadence: 'WEEKLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Town & Country', cadence: 'MONTHLY', branches: parseBranches('ML,NE') },
+  { name: 'Travel & Leisure', cadence: 'MONTHLY', branches: parseBranches('ML,NE') },
+  { name: 'US Weekly', cadence: 'WEEKLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Vanity Fair - American Ed', cadence: 'MONTHLY', branches: parseBranches('ML,NE') },
+  { name: 'VegNews Magazine', cadence: 'BI_MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Veranda', cadence: 'BI_MONTHLY', branches: parseBranches('ML,NE') },
+  { name: 'Vogue', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'The Week - US Edition', cadence: 'WEEKLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'The Week Junior', cadence: 'WEEKLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Wired', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Womens Health', cadence: 'MONTHLY', branches: parseBranches('ML,NE,CB') },
+  { name: 'Zoobooks', cadence: 'BI_MONTHLY', branches: parseBranches('ML,NE,CB') },
+]
+
 async function main() {
   console.log('Seeding database...')
 
-  // Create admin user
+  // Users
   const adminHash = await bcrypt.hash('admin1234', 10)
   const admin = await db.user.upsert({
     where: { email: 'admin@library.org' },
@@ -22,9 +155,8 @@ async function main() {
     },
   })
 
-  // Create staff user
   const staffHash = await bcrypt.hash('staff1234', 10)
-  const staff = await db.user.upsert({
+  await db.user.upsert({
     where: { email: 'staff@library.org' },
     update: {},
     create: {
@@ -35,107 +167,49 @@ async function main() {
     },
   })
 
-  // Create sample magazines and collect them
-  const magazineData = [
-    { name: 'The Economist', cadence: 'WEEKLY' as const, notes: 'International edition' },
-    { name: 'Time Magazine', cadence: 'WEEKLY' as const },
-    { name: 'National Geographic', cadence: 'MONTHLY' as const, notes: 'With maps supplement' },
-    { name: 'Scientific American', cadence: 'MONTHLY' as const },
-    { name: 'The New Yorker', cadence: 'WEEKLY' as const },
-    { name: 'Consumer Reports', cadence: 'MONTHLY' as const },
-    { name: 'Nature', cadence: 'WEEKLY' as const, notes: 'Academic journal' },
-    { name: 'Wired', cadence: 'MONTHLY' as const },
+  // Branches
+  const branchData = [
+    { name: 'Main Library', code: 'MAIN' },
+    { name: 'North Edison Branch Library', code: 'NORTH' },
+    { name: 'Clara Barton Branch Library', code: 'CB' },
+    { name: 'Bookmobile', code: 'MOBILE' },
   ]
-
-  const createdMagazines: Array<{ id: string; name: string; cadence: string }> = []
-  for (const mag of magazineData) {
-    const created = await db.magazine.upsert({
-      where: { id: mag.name },
-      update: {},
-      create: mag,
-    }).catch(() => db.magazine.create({ data: mag }))
-    createdMagazines.push({ id: created.id, name: created.name, cadence: created.cadence })
-  }
-
-  // Create branches
-  const branches = await Promise.all([
-    db.branch.upsert({
-      where: { code: 'MAIN' },
-      update: {},
-      create: { name: 'Main Library', code: 'MAIN' },
-    }),
-    db.branch.upsert({
-      where: { code: 'NORTH' },
-      update: {},
-      create: { name: 'North Edison Branch Library', code: 'NORTH' },
-    }),
-    db.branch.upsert({
-      where: { code: 'CB' },
-      update: {},
-      create: { name: 'Clara Barton Branch Library', code: 'CB' },
-    }),
-    db.branch.upsert({
-      where: { code: 'MOBILE' },
-      update: {},
-      create: { name: 'Bookmobile', code: 'MOBILE' },
-    }),
-  ])
-
-  const [main, north, cb, mobile] = branches
-
-  // Assign magazines to branches
-  async function assignMagazine(branchId: string, magazineId: string, quantity = 1) {
-    await db.branchMagazine.upsert({
-      where: { branchId_magazineId: { branchId, magazineId } },
-      update: { quantity },
-      create: { branchId, magazineId, quantity },
+  const branchMap = new Map<string, string>()
+  for (const b of branchData) {
+    const branch = await db.branch.upsert({
+      where: { code: b.code },
+      update: { name: b.name },
+      create: b,
     })
+    branchMap.set(b.code, branch.id)
+    console.log(`  Branch: ${b.name} (${b.code})`)
   }
+  console.log(`✓ ${branchData.length} branches created`)
 
-  // Main Library: all magazines, qty 2 for weeklies, 1 for monthlies
-  for (const mag of createdMagazines) {
-    const qty = mag.cadence === 'WEEKLY' ? 2 : 1
-    await assignMagazine(main.id, mag.id, qty)
-  }
+  // Magazines + subscriptions
+  let magCount = 0
+  let subCount = 0
+  for (const mag of MAGAZINES) {
+    const existing = await db.magazine.findFirst({ where: { name: mag.name } })
+    const magazine = existing ?? await db.magazine.create({
+      data: { name: mag.name, cadence: mag.cadence },
+    })
+    magCount++
 
-  // North: all magazines, qty 1
-  for (const mag of createdMagazines) {
-    await assignMagazine(north.id, mag.id, 1)
-  }
-
-  // CB: 5 magazines (skip Nature, Wired, Consumer Reports)
-  const cbMags = createdMagazines.filter(m => !['Nature', 'Wired', 'Consumer Reports'].includes(m.name))
-  for (const mag of cbMags) {
-    await assignMagazine(cb.id, mag.id, 1)
-  }
-
-  // Bookmobile: 3 magazines
-  const mobileMags = createdMagazines.filter(m => ['Time Magazine', 'National Geographic', 'The New Yorker'].includes(m.name))
-  for (const mag of mobileMags) {
-    await assignMagazine(mobile.id, mag.id, 1)
-  }
-
-  // Create sample receipts (all assigned to Main Library for seed data)
-  for (const mag of createdMagazines) {
-    const cadence = mag.cadence
-    const receiptCount = Math.floor(Math.random() * 3)
-    for (let i = receiptCount; i >= 0; i--) {
-      const daysAgo = i * (cadence === 'WEEKLY' ? 7 : 30) + Math.floor(Math.random() * 3)
-      const receivedDate = new Date()
-      receivedDate.setDate(receivedDate.getDate() - daysAgo)
-
-      await db.issueReceipt.create({
-        data: {
-          magazineId: mag.id,
-          receivedById: Math.random() > 0.5 ? admin.id : staff.id,
-          branchId: main.id,
-          receivedDate,
-          notes: i === 0 ? null : 'Received in good condition',
-        },
-      }).catch(() => {})
+    for (const b of mag.branches) {
+      const dbCode = BRANCH_MAP[b.code]
+      const branchId = branchMap.get(dbCode)
+      if (!branchId) continue
+      await db.branchMagazine.upsert({
+        where: { branchId_magazineId: { branchId, magazineId: magazine.id } },
+        update: { quantity: b.qty },
+        create: { branchId, magazineId: magazine.id, quantity: b.qty },
+      })
+      subCount++
     }
   }
 
+  console.log(`✓ ${magCount} magazines, ${subCount} subscriptions`)
   console.log('✓ Seed complete')
   console.log('  Admin: admin@library.org / admin1234')
   console.log('  Staff: staff@library.org / staff1234')

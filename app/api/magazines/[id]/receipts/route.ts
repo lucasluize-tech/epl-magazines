@@ -83,7 +83,7 @@ export async function POST(request: NextRequest, { params }: RouteContext): Prom
       magazineId: id,
       magazineName: magazine.name,
       receiptId: receipt.id,
-      receivedDate,
+      receivedDate: receivedDate.split('T')[0],
       branchId,
       branchName: branch.name,
     })
@@ -91,6 +91,66 @@ export async function POST(request: NextRequest, { params }: RouteContext): Prom
     return Response.json(receipt, { status: 201 })
   } catch (err) {
     console.error('Create receipt error:', err)
+    return Response.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
+interface UpdateReceiptBody {
+  receivedDate: string
+  branchId: string
+}
+
+/**
+ * PUT /api/magazines/[id]/receipts
+ * Updates the most recent receipt's receivedDate for a magazine at a branch.
+ * Admin only. Body: { receivedDate: date string, branchId: string }.
+ */
+export async function PUT(request: NextRequest, { params }: RouteContext): Promise<Response> {
+  try {
+    const session = await verifySession()
+    if (session.role !== 'ADMIN') {
+      return Response.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const { id } = await params
+    const { receivedDate, branchId } = (await request.json()) as UpdateReceiptBody
+
+    if (!receivedDate || !branchId) {
+      return Response.json({ error: 'receivedDate and branchId are required' }, { status: 400 })
+    }
+
+    const lastReceipt = await db.issueReceipt.findFirst({
+      where: { magazineId: id, branchId },
+      orderBy: { receivedDate: 'desc' },
+    })
+
+    if (!lastReceipt) {
+      return Response.json({ error: 'No receipt found to update' }, { status: 404 })
+    }
+
+    const magazine = await db.magazine.findUnique({ where: { id } })
+
+    const updated = await db.issueReceipt.update({
+      where: { id: lastReceipt.id },
+      data: { receivedDate: new Date(receivedDate) },
+      include: {
+        receivedBy: { select: { name: true } },
+        branch: { select: { name: true, code: true } },
+      },
+    })
+
+    const oldDate = lastReceipt.receivedDate.toISOString().split('T')[0]
+    const newDate = receivedDate.split('T')[0]
+    auditLog(session.userId, 'RECEIPT_EDITED', {
+      magazineId: id,
+      magazineName: magazine?.name,
+      receiptId: lastReceipt.id,
+      changes: `receivedDate: ${oldDate} → ${newDate}`,
+    })
+
+    return Response.json(updated)
+  } catch (err) {
+    console.error('Update receipt error:', err)
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

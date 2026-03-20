@@ -51,9 +51,18 @@ export async function PUT(request: NextRequest, { params }: RouteContext): Promi
     if (body.notes !== undefined) validFields.notes = body.notes?.trim() || null
     if (body.active !== undefined) validFields.active = body.active
 
+    const before = await db.magazine.findUnique({ where: { id } })
+    if (!before) return Response.json({ error: 'Not found' }, { status: 404 })
+
     const magazine = await db.magazine.update({ where: { id }, data: validFields })
 
-    auditLog(session.userId, 'MAGAZINE_UPDATED', { magazineId: id, changes: Object.keys(validFields).join(',') })
+    // Build "field: old → new" for only the fields that actually changed
+    const changes = Object.entries(validFields)
+      .filter(([k]) => String(before[k as keyof typeof before]) !== String(validFields[k as keyof typeof validFields]))
+      .map(([k, v]) => `${k}: ${before[k as keyof typeof before]} → ${v}`)
+      .join(', ')
+
+    auditLog(session.userId, 'MAGAZINE_UPDATED', { magazineId: id, magazineName: before.name, changes: changes || 'no changes' })
     return Response.json(magazine)
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {

@@ -82,34 +82,37 @@ export default function EditMagazineDialog({ subscription, branchId, open, onOpe
         return
       }
 
-      // Update branch subscription (quantity)
-      const subRes = await fetch(`/api/branches/${branchId}/magazines/${subscription.magazineId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quantity }),
-      })
+      // Update branch subscription (quantity) only if it changed
+      if (quantity !== subscription.quantity) {
+        const subRes = await fetch(`/api/branches/${branchId}/magazines/${subscription.magazineId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ quantity }),
+        })
 
-      if (!subRes.ok) {
-        toast.error('Magazine updated but failed to update branch subscription')
+        if (!subRes.ok) {
+          toast.error('Magazine updated but failed to update branch subscription')
+        }
       }
 
-      // If lastReceivedDate changed, insert a new receipt
+      // If lastReceivedDate changed, update the existing receipt (or create if none exists)
       const originalDate = subscription.lastReceivedDate
         ? format(new Date(subscription.lastReceivedDate), 'yyyy-MM-dd')
         : ''
       if (lastReceivedDate && lastReceivedDate !== originalDate) {
+        const method = subscription.lastReceivedDate ? 'PUT' : 'POST'
+        const body = method === 'PUT'
+          ? { receivedDate: lastReceivedDate, branchId }
+          : { receivedDate: lastReceivedDate, branchId, notes: 'Manually set by admin' }
+
         const receiptRes = await fetch(`/api/magazines/${subscription.magazineId}/receipts`, {
-          method: 'POST',
+          method,
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            receivedDate: new Date(lastReceivedDate).toISOString(),
-            branchId,
-            notes: 'Manually adjusted by admin',
-          }),
+          body: JSON.stringify(body),
         })
 
         if (!receiptRes.ok) {
-          toast.error('Magazine updated but failed to set last received date')
+          toast.error('Magazine updated but failed to update last received date')
         }
       }
 

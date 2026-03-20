@@ -23,9 +23,13 @@ const ACTION_STYLES: Partial<Record<AuditAction, { bg: string; color: string }>>
   MAGAZINE_UPDATED:  { bg: 'oklch(0.95 0.06 85)', color: 'oklch(0.45 0.15 78)' },
   MAGAZINE_DELETED:  { bg: 'oklch(0.93 0.04 27)', color: 'oklch(0.40 0.18 27)' },
   RECEIPT_CREATED:   { bg: 'oklch(0.92 0.050 155)', color: 'oklch(0.38 0.082 156)' },
+  RECEIPT_EDITED:    { bg: 'oklch(0.95 0.06 85)', color: 'oklch(0.45 0.15 78)' },
   USER_CREATED:      { bg: 'oklch(0.95 0.06 85)', color: 'oklch(0.45 0.15 78)' },
   USER_DELETED:      { bg: 'oklch(0.93 0.04 27)', color: 'oklch(0.40 0.18 27)' },
   USER_UPDATED:      { bg: 'oklch(0.93 0.010 88)', color: 'oklch(0.50 0.035 72)' },
+  TRANSFER_INITIATED:{ bg: 'oklch(0.92 0.05 250)', color: 'oklch(0.40 0.15 250)' },
+  TRANSFER_COMPLETED:{ bg: 'oklch(0.92 0.05 250)', color: 'oklch(0.40 0.15 250)' },
+  TRANSFER_CANCELLED:{ bg: 'oklch(0.93 0.04 27)', color: 'oklch(0.40 0.18 27)' },
 }
 
 const DEFAULT_STYLE = { bg: 'oklch(0.93 0.010 88)', color: 'oklch(0.50 0.035 72)' }
@@ -146,7 +150,7 @@ export default async function LogPage({ searchParams }: PageProps) {
                   const { timestamp, userId, action, level: _level, ...details } = entry
                   const actionStyle = getActionStyle(action)
                   const detailStr = Object.entries(details)
-                    .filter(([k]) => !k.endsWith('Id'))
+                    .filter(([k]) => !k.endsWith('Id') && k !== 'message')
                     .map(([k, v]) => {
                       if (k === 'magazineName') return `magazine: ${v}`
                       if (k === 'branchName') return `branch: ${v}`

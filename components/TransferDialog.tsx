@@ -108,7 +108,9 @@ export default function TransferDialog({
             <Label>Destination Branch</Label>
             <Select value={toBranchId} onValueChange={(val) => setToBranchId(val ?? '')}>
               <SelectTrigger>
-                <SelectValue placeholder="Select branch" />
+                <SelectValue placeholder="Select branch">
+                  {availableBranches.find((b) => b.id === toBranchId)?.name}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {availableBranches.map((b) => (

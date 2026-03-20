@@ -116,6 +116,7 @@ export default async function MagazinesPage({ searchParams }: PageProps) {
               <TableRow style={{ borderColor: 'oklch(0.876 0.016 88)', backgroundColor: 'oklch(0.963 0.012 91)' }}>
                 <TableHead className="font-semibold" style={{ color: 'oklch(0.30 0.028 62)' }}>Name</TableHead>
                 <TableHead className="font-semibold" style={{ color: 'oklch(0.30 0.028 62)' }}>Cadence</TableHead>
+                <TableHead className="font-semibold" style={{ color: 'oklch(0.30 0.028 62)' }}>Qty</TableHead>
                 <TableHead className="font-semibold" style={{ color: 'oklch(0.30 0.028 62)' }}>Status</TableHead>
                 <TableHead className="font-semibold" style={{ color: 'oklch(0.30 0.028 62)' }}>Total Deliveries</TableHead>
                 <TableHead className="font-semibold" style={{ color: 'oklch(0.30 0.028 62)' }}>Last Received</TableHead>
@@ -158,6 +159,11 @@ export default async function MagazinesPage({ searchParams }: PageProps) {
                     >
                       {CADENCE_LABELS[mag.cadence]}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-sm" style={{ color: 'oklch(0.40 0.028 62)' }}>
+                      {quantityMap.get(mag.id) ?? 0}
+                    </span>
                   </TableCell>
                   <TableCell><MagazineStatusBadge status={mag.status} /></TableCell>
                   <TableCell>
