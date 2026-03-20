@@ -132,6 +132,20 @@ export interface BranchMagazine {
   createdAt: Date
 }
 
+/** Branch magazine subscription enriched with magazine data and receipt stats for admin inventory view */
+export interface BranchMagazineWithDetails {
+  id: string
+  branchId: string
+  magazineId: string
+  quantity: number
+  active: boolean
+  createdAt: Date
+  magazine: Magazine
+  totalIssues: number
+  lastReceivedDate: Date | null
+  nextExpectedDate: Date | null
+}
+
 /** Branch with count of active magazine subscriptions */
 export interface BranchWithCount extends Branch {
   _count: { magazines: number }
@@ -170,6 +184,8 @@ export type AuditAction =
   | 'BRANCH_MAGAZINE_ADDED'
   | 'BRANCH_MAGAZINE_UPDATED'
   | 'BRANCH_MAGAZINE_REMOVED'
+  | 'USER_NAME_CHANGED'
+  | 'USER_PASSWORD_CHANGED'
 
 /** Parsed JSON line from logs/audit.log */
 export interface AuditLogEntry {
