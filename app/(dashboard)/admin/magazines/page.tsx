@@ -64,7 +64,7 @@ export default async function AdminMagazinesPage({ searchParams }: PageProps) {
         }),
         db.issueReceipt.findFirst({
           where: { magazineId: sub.magazineId, branchId },
-          orderBy: { createdAt: 'desc' },
+          orderBy: { receivedDate: 'desc' },
           select: { receivedDate: true },
         }),
       ])
