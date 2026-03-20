@@ -36,8 +36,11 @@ model Transfer {
   initiatedById  String
   completedBy    User?          @relation("TransferCompleted", fields: [completedById], references: [id])
   completedById  String?
+  cancelledBy    User?          @relation("TransferCancelled", fields: [cancelledById], references: [id])
+  cancelledById  String?
   createdAt      DateTime       @default(now())
   completedAt    DateTime?
+  cancelledAt    DateTime?
 }
 ```
 
@@ -59,7 +62,7 @@ Any authenticated user (STAFF or ADMIN).
 - New send icon button (`SendHorizontal` from Lucide) in the Actions column.
 
 **Staff magazines list page (`/magazines`):**
-- Magazine name becomes a clickable link to `/magazines/[id]` (underline on hover, pointer cursor).
+- Magazine name becomes a clickable link to `/magazines/[id]` (underline on hover, pointer cursor). Staff access receipt history by clicking the magazine name to navigate to the detail page.
 - The old "History" button slot becomes a Transfer button (send icon).
 
 Both open the same `TransferDialog` component.
@@ -81,11 +84,13 @@ Both open the same `TransferDialog` component.
   - `fromBranchId` != `toBranchId`
   - Magazine exists
   - Both branches exist and are active
-- On success:
-  - Decrease sender's `BranchMagazine.quantity` by `quantity`
+- **All operations wrapped in a Prisma `$transaction`** to ensure atomicity:
+  - Decrease sender's `BranchMagazine.quantity` by `quantity` (using `UPDATE ... WHERE quantity >= :requested` to prevent race conditions driving quantity negative)
   - Create `Transfer` record with status = PENDING
   - Audit log: `TRANSFER_INITIATED` with magazineId, fromBranchId, toBranchId, quantity
 - Multiple pending transfers for the same magazine to the same branch are allowed, as long as sender has sufficient quantity each time.
+
+**Zero quantity after transfer:** A `BranchMagazine` with `quantity = 0` and `active = true` remains a valid active subscription. The branch still expects regular deliveries — it just has no copies on hand. Dashboard cards still appear for that subscription.
 
 ---
 
@@ -93,9 +98,9 @@ Both open the same `TransferDialog` component.
 
 ### Flow
 
-When the receiving branch marks a pending transfer as received:
+When the receiving branch marks a pending transfer as received, **all operations wrapped in a Prisma `$transaction`**:
 
-1. Create `IssueReceipt` — magazineId, branchId = toBranchId, receivedById = current user, receivedDate = now. This counts as fulfilling a cadence cycle (delivery arrived).
+1. Create `IssueReceipt` — magazineId, branchId = toBranchId, receivedById = current user, receivedDate = now. This counts as fulfilling a cadence cycle (the transfer is fixing a missed delivery).
 2. Check if `BranchMagazine` exists for magazine + toBranch:
    - **Exists** (branch already has a subscription): `quantity += transfer.quantity`
    - **Does not exist**: create `BranchMagazine` with `active = false`, `quantity = transfer.quantity`
@@ -121,9 +126,10 @@ Admin can cancel a pending transfer. This restores the sender's `BranchMagazine.
 
 - ADMIN only
 - Validates: transfer exists, status is PENDING
-- On success:
-  - Increase `fromBranch`'s `BranchMagazine.quantity` by `transfer.quantity`
-  - Update transfer: status = CANCELLED
+- **All operations wrapped in a Prisma `$transaction`**:
+  - If sender's `BranchMagazine` still exists: increase `quantity` by `transfer.quantity`
+  - If sender's `BranchMagazine` was deleted since initiation: re-create it with `active = false`, `quantity = transfer.quantity`
+  - Update transfer: status = CANCELLED, cancelledById = current user, cancelledAt = now
   - Audit log: `TRANSFER_CANCELLED`
 
 ---
@@ -140,10 +146,10 @@ The dashboard currently has 4 buckets (Overdue, Expected This Week, Upcoming, Ne
 
 **Buckets reduced to 2:**
 
-1. **Expected This Week** (shown first) — magazines where `nextExpectedDate` falls within the current calendar week (Sunday through Saturday). Not a rolling +7 day window.
+1. **Expected This Week** (shown first) — magazines where `nextExpectedDate` falls within the current calendar week (Sunday through Saturday). This is a **breaking change** from the previous rolling +7 day window. The `isExpectedThisWeek` function in `lib/cadence.ts` must be updated to use calendar week boundaries. On Saturday evening the bucket may be empty until Sunday — this is correct behavior.
 2. **Overdue** — magazines where `nextExpectedDate` has passed without a receipt for that cadence cycle.
 
-Remove "Upcoming" and "Never Received" buckets entirely.
+Remove "Upcoming" and "Never Received" buckets entirely. Newly subscribed magazines with no receipts will not appear on the dashboard until their first `nextExpectedDate` falls within the current week or becomes overdue.
 
 **Pending transfers on dashboard:**
 
@@ -153,7 +159,9 @@ Query `Transfer` records where `toBranchId` = active branch AND `status` = PENDI
 
 Instead of showing Last Received / Next Expected dates. Transfer cards have a "Received" button that triggers the transfer completion flow (Section 3).
 
-**Suppression rule:** For each pending transfer, if the receiving branch has an active `BranchMagazine` subscription for the same `magazineId`, suppress that magazine's subscription card from **all** dashboard buckets (Expected This Week and Overdue). The transfer card replaces it — the magazine is no longer "overdue" because it's being delivered by another branch.
+**Multiple pending transfers for the same magazine:** Each pending transfer renders as its own card. Each card has its own "Received" button that completes that specific transfer.
+
+**Suppression rule:** For each pending transfer, if the receiving branch has an active `BranchMagazine` subscription for the same `magazineId`, suppress that magazine's subscription card from **all** dashboard buckets (Expected This Week and Overdue). The transfer card replaces it — the magazine is no longer "overdue" because it's being delivered by another branch. Suppression is based on `magazineId` matching — if any pending transfer exists for a magazine, the subscription card for that magazine is suppressed regardless of whether the `BranchMagazine` is active or inactive.
 
 ---
 
@@ -177,7 +185,7 @@ The fixed `w-64` sidebar takes significant horizontal space, reducing the main c
 
 **Expanded state (w-64):** Current behavior, unchanged.
 
-**State persistence:** Store collapsed/expanded preference in a cookie so it persists across page loads and sessions.
+**State persistence:** Store collapsed/expanded preference in a cookie named `epl-sidebar-collapsed` (values: `true`/`false`). Persists across page loads and sessions.
 
 **Main content area:** Expands to fill the freed space when sidebar collapses. Smooth transition animation on both the sidebar width and the main content margin.
 
@@ -192,18 +200,36 @@ The fixed `w-64` sidebar takes significant horizontal space, reducing the main c
 
 ### Staff Magazines List Page (`/magazines`)
 
-- **Magazine name:** Becomes a clickable `<Link>` to `/magazines/[id]`. On hover: underline text, pointer cursor.
+- **Magazine name:** Becomes a clickable `<Link>` to `/magazines/[id]`. On hover: underline text, pointer cursor. This is how staff access receipt history (detail page).
 - **Transfer button:** The slot previously occupied by the "History" button becomes a Transfer button (send icon) that opens `TransferDialog`.
+
+---
+
+## 8. Transfers Management UI
+
+### Problem
+
+Admins need to view and cancel pending transfers. There is no UI specified for this.
+
+### Design
+
+**Admin magazines inventory table:** Add a visual indicator on rows that have pending outbound transfers (e.g., a small badge or icon showing "N pending" next to the magazine name). Clicking it expands/shows the pending transfers for that magazine.
+
+**Alternatively (simpler):** Add a dedicated transfers page at `/admin/transfers` accessible from the admin sidebar. Shows a table of all transfers (filterable by status: Pending, Completed, Cancelled) with columns: Magazine, From Branch, To Branch, Quantity, Status, Initiated By, Date, Actions (Cancel button for pending). This gives admins a centralized view.
+
+**Recommendation:** The dedicated page approach is simpler and doesn't clutter the existing inventory table. Add "Transfers" to the admin sidebar navigation.
 
 ---
 
 ## Technical Notes
 
 - **Schema migration required.** New `Transfer` model and `TransferStatus` enum. Reverse relations added to `Magazine`, `Branch`, and `User`.
-- **New API routes:** `POST /api/transfers`, `PUT /api/transfers/[id]/complete`, `PUT /api/transfers/[id]/cancel`
+- **All transfer state changes use Prisma `$transaction`** to guarantee atomicity of quantity adjustments and record creation.
+- **New API routes:** `POST /api/transfers`, `GET /api/transfers` (list, filterable by status/branch), `PUT /api/transfers/[id]/complete`, `PUT /api/transfers/[id]/cancel`
 - **New components:** `TransferDialog` (shared between admin and staff pages)
-- **Modified pages:** Dashboard (buckets, title, transfer cards), `/magazines` (clickable names, transfer button), `/admin/magazines` (column swap, rename, transfer button)
-- **Modified layout:** Sidebar collapse with cookie persistence
+- **New page:** `/admin/transfers` for viewing and managing all transfers
+- **Modified pages:** Dashboard (buckets, title, transfer cards, suppression), `/magazines` (clickable names, transfer button), `/admin/magazines` (column swap, rename, transfer button)
+- **Modified layout:** Sidebar collapse with cookie persistence (`epl-sidebar-collapsed`)
+- **Modified function:** `isExpectedThisWeek` in `lib/cadence.ts` — change from rolling +7 days to calendar week (Sunday–Saturday)
 - **New audit actions:** `TRANSFER_INITIATED`, `TRANSFER_COMPLETED`, `TRANSFER_CANCELLED`
 - **Terminology change:** "Total Issues" → "Total Deliveries" across the UI
-- **Calendar week:** Sunday through Saturday for "Expected This Week" calculation
