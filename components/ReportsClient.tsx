@@ -26,6 +26,7 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
+import { ReceiptBarChart, TimelineLineChart } from './ReportsCharts'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -329,7 +330,17 @@ export default function ReportsClient({
 
       {/* Content area — conditional rendering based on active tab */}
       {filters.tab === 'receipts' && (
-        <ReceiptsTable rows={receiptSummary} />
+        <>
+          {receiptSummary && receiptSummary.length > 0 && (
+            <div className="mb-6">
+              <ReceiptBarChart
+                data={receiptSummary}
+                singleBranch={filters.branch !== 'all'}
+              />
+            </div>
+          )}
+          <ReceiptsTable rows={receiptSummary} />
+        </>
       )}
       {filters.tab === 'overdue' && (
         <OverdueSection data={overdueReport} />
@@ -341,7 +352,17 @@ export default function ReportsClient({
         <SubscriptionsTable rows={subscriptionOverview} />
       )}
       {filters.tab === 'timeline' && (
-        <TimelineTable data={receiptTimeline} />
+        <>
+          {receiptTimeline && receiptTimeline.data.length > 0 && (
+            <div className="mb-6">
+              <TimelineLineChart
+                data={receiptTimeline.data}
+                bucketType={receiptTimeline.bucketType}
+              />
+            </div>
+          )}
+          <TimelineTable data={receiptTimeline} />
+        </>
       )}
     </>
   )
