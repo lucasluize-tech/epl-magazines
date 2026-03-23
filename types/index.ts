@@ -72,6 +72,7 @@ export interface Magazine {
   id: string
   name: string
   cadence: CadenceType
+  language: string
   active: boolean
   notes: string | null
   createdAt: Date
@@ -226,6 +227,7 @@ export type AuditAction =
   | 'TRANSFER_INITIATED'
   | 'TRANSFER_COMPLETED'
   | 'TRANSFER_CANCELLED'
+  | 'REPORT_EXPORTED'
 
 /** Parsed JSON line from logs/audit.log */
 export interface AuditLogEntry {
@@ -234,4 +236,74 @@ export interface AuditLogEntry {
   userId: string
   action: AuditAction | string
   [key: string]: unknown // spread details passed to auditLog()
+}
+
+// ---------------------------------------------------------------------------
+// Reports
+// ---------------------------------------------------------------------------
+
+/** Tab identifiers for the reports page */
+export type ReportTab = 'receipts' | 'overdue' | 'transfers' | 'subscriptions' | 'timeline'
+
+/** Period preset identifiers for report date filtering */
+export type ReportPeriod = 'this_month' | 'last_month' | 'this_quarter' | 'this_year' | 'custom'
+
+/** Parsed filter state from searchParams on the reports page */
+export interface ReportFilters {
+  tab: ReportTab
+  period: ReportPeriod
+  from: Date
+  to: Date
+  branch: string
+  language: string
+}
+
+/** Row in the Receipt Summary report table */
+export interface ReceiptSummaryRow {
+  magazineName: string
+  language: string
+  cadence: CadenceType
+  receiptCount: number
+  lastReceivedDate: Date | null
+  branchName: string
+}
+
+/** Row in the Overdue / Compliance report table */
+export interface OverdueReportRow {
+  magazineName: string
+  language: string
+  branchName: string
+  cadence: CadenceType
+  daysOverdue: number
+  lastReceivedDate: Date | null
+  nextExpectedDate: Date | null
+}
+
+/** Row in the Transfer Activity report table */
+export interface TransferReportRow {
+  date: Date
+  magazineName: string
+  fromBranch: string
+  toBranch: string
+  quantity: number
+  status: TransferStatus
+  initiatedBy: string
+  resolvedBy: string | null
+}
+
+/** Row in the Subscription Overview report table */
+export interface SubscriptionReportRow {
+  branchName: string
+  magazineName: string
+  language: string
+  cadence: CadenceType
+  quantity: number
+  active: boolean
+}
+
+/** Data point for the Receipt Timeline chart */
+export interface TimelineDataPoint {
+  period: string
+  branchName: string
+  count: number
 }
