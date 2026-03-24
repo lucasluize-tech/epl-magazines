@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { Prisma } from '@/generated/prisma/client'
 import db from '@/lib/db'
+import { withRetry } from '@/lib/db-retry'
 import { verifySession } from '@/lib/dal'
 import { auditLog } from '@/lib/logger'
 import type { CadenceType } from '@/types'
@@ -10,6 +11,7 @@ type RouteContext = { params: Promise<{ id: string }> }
 interface UpdateMagazineBody {
   name?: string
   cadence?: CadenceType
+  language?: string
   notes?: string
   active?: boolean
 }
@@ -45,16 +47,20 @@ export async function PUT(request: NextRequest, { params }: RouteContext): Promi
     const { id } = await params
     const body = (await request.json()) as UpdateMagazineBody
 
-    const validFields: { name?: string; cadence?: CadenceType; notes?: string | null; active?: boolean } = {}
+    const validFields: { name?: string; cadence?: CadenceType; language?: string; notes?: string | null; active?: boolean } = {}
     if (body.name !== undefined) validFields.name = body.name.trim()
     if (body.cadence !== undefined) validFields.cadence = body.cadence
+    if (body.language !== undefined) {
+      const lang = body.language.trim()
+      validFields.language = lang.charAt(0).toUpperCase() + lang.slice(1).toLowerCase()
+    }
     if (body.notes !== undefined) validFields.notes = body.notes?.trim() || null
     if (body.active !== undefined) validFields.active = body.active
 
     const before = await db.magazine.findUnique({ where: { id } })
     if (!before) return Response.json({ error: 'Not found' }, { status: 404 })
 
-    const magazine = await db.magazine.update({ where: { id }, data: validFields })
+    const magazine = await withRetry(() => db.magazine.update({ where: { id }, data: validFields }))
 
     // Build "field: old → new" for only the fields that actually changed
     const changes = Object.entries(validFields)
@@ -67,6 +73,10 @@ export async function PUT(request: NextRequest, { params }: RouteContext): Promi
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
       return Response.json({ error: 'Not found' }, { status: 404 })
+    }
+    const e = err as { code?: string; message?: string }
+    if (e?.code === 'SQLITE_BUSY' || e?.code === 'SQLITE_LOCKED' || (e?.message ?? '').includes('database is locked')) {
+      return Response.json({ error: 'Database is busy, please try again' }, { status: 503 })
     }
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
@@ -87,15 +97,21 @@ export async function DELETE(_request: NextRequest, { params }: RouteContext): P
     const { id } = await params
 
     // Delete related records first (manual cascade)
-    await db.branchMagazine.deleteMany({ where: { magazineId: id } })
-    await db.issueReceipt.deleteMany({ where: { magazineId: id } })
-    const magazine = await db.magazine.delete({ where: { id } })
+    const magazine = await withRetry(async () => {
+      await db.branchMagazine.deleteMany({ where: { magazineId: id } })
+      await db.issueReceipt.deleteMany({ where: { magazineId: id } })
+      return db.magazine.delete({ where: { id } })
+    })
 
     auditLog(session.userId, 'MAGAZINE_DELETED', { magazineId: id, name: magazine.name })
     return Response.json({ success: true })
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
       return Response.json({ error: 'Not found' }, { status: 404 })
+    }
+    const e = err as { code?: string; message?: string }
+    if (e?.code === 'SQLITE_BUSY' || e?.code === 'SQLITE_LOCKED' || (e?.message ?? '').includes('database is locked')) {
+      return Response.json({ error: 'Database is busy, please try again' }, { status: 503 })
     }
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }

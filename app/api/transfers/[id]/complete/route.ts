@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server'
 import db from '@/lib/db'
+import { withRetry } from '@/lib/db-retry'
 import { verifySession } from '@/lib/dal'
 import { resolveActiveBranchId } from '@/lib/branch'
 import { auditLog } from '@/lib/logger'
@@ -34,7 +35,7 @@ export async function PUT(request: NextRequest, { params }: RouteContext): Promi
       return Response.json({ error: 'Only the receiving branch can complete this transfer' }, { status: 403 })
     }
 
-    await db.$transaction(async (tx) => {
+    await withRetry(() => db.$transaction(async (tx) => {
       // 1. Create IssueReceipt
       await tx.issueReceipt.create({
         data: {
@@ -80,7 +81,7 @@ export async function PUT(request: NextRequest, { params }: RouteContext): Promi
           completedAt: new Date(),
         },
       })
-    })
+    }))
 
     auditLog(session.userId, 'TRANSFER_COMPLETED', {
       transferId: id,
@@ -95,6 +96,10 @@ export async function PUT(request: NextRequest, { params }: RouteContext): Promi
 
     return Response.json({ success: true })
   } catch (err) {
+    const e = err as { code?: string; message?: string }
+    if (e?.code === 'SQLITE_BUSY' || e?.code === 'SQLITE_LOCKED' || (e?.message ?? '').includes('database is locked')) {
+      return Response.json({ error: 'Database is busy, please try again' }, { status: 503 })
+    }
     console.error('Complete transfer error:', err)
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }

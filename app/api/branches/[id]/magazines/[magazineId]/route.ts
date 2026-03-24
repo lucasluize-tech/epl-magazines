@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { Prisma } from '@/generated/prisma/client'
 import db from '@/lib/db'
+import { withRetry } from '@/lib/db-retry'
 import { verifySession } from '@/lib/dal'
 import { auditLog } from '@/lib/logger'
 
@@ -35,10 +36,10 @@ export async function PUT(request: NextRequest, { params }: RouteContext): Promi
     })
     if (!before) return Response.json({ error: 'Subscription not found' }, { status: 404 })
 
-    const subscription = await db.branchMagazine.update({
+    const subscription = await withRetry(() => db.branchMagazine.update({
       where: { branchId_magazineId: { branchId: id, magazineId } },
       data: validFields,
-    })
+    }))
 
     const changes = Object.entries(validFields)
       .filter(([k]) => String(before[k as keyof typeof before]) !== String(validFields[k as keyof typeof validFields]))
@@ -58,6 +59,10 @@ export async function PUT(request: NextRequest, { params }: RouteContext): Promi
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
       return Response.json({ error: 'Subscription not found' }, { status: 404 })
     }
+    const e = err as { code?: string; message?: string }
+    if (e?.code === 'SQLITE_BUSY' || e?.code === 'SQLITE_LOCKED' || (e?.message ?? '').includes('database is locked')) {
+      return Response.json({ error: 'Database is busy, please try again' }, { status: 503 })
+    }
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -75,9 +80,9 @@ export async function DELETE(_request: NextRequest, { params }: RouteContext): P
 
     const { id, magazineId } = await params
 
-    await db.branchMagazine.delete({
+    await withRetry(() => db.branchMagazine.delete({
       where: { branchId_magazineId: { branchId: id, magazineId } },
-    })
+    }))
 
     auditLog(session.userId, 'BRANCH_MAGAZINE_REMOVED', {
       branchId: id,
@@ -88,6 +93,10 @@ export async function DELETE(_request: NextRequest, { params }: RouteContext): P
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
       return Response.json({ error: 'Subscription not found' }, { status: 404 })
+    }
+    const e = err as { code?: string; message?: string }
+    if (e?.code === 'SQLITE_BUSY' || e?.code === 'SQLITE_LOCKED' || (e?.message ?? '').includes('database is locked')) {
+      return Response.json({ error: 'Database is busy, please try again' }, { status: 503 })
     }
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }

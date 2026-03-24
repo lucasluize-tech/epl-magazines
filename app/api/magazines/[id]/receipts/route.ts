@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server'
 import db from '@/lib/db'
+import { withRetry } from '@/lib/db-retry'
 import { verifySession } from '@/lib/dal'
 import { auditLog } from '@/lib/logger'
 
@@ -65,7 +66,7 @@ export async function POST(request: NextRequest, { params }: RouteContext): Prom
     const branch = await db.branch.findUnique({ where: { id: branchId } })
     if (!branch) return Response.json({ error: 'Branch not found' }, { status: 404 })
 
-    const receipt = await db.issueReceipt.create({
+    const receipt = await withRetry(() => db.issueReceipt.create({
       data: {
         magazineId: id,
         receivedById: session.userId,
@@ -77,7 +78,7 @@ export async function POST(request: NextRequest, { params }: RouteContext): Prom
         receivedBy: { select: { name: true } },
         branch: { select: { name: true, code: true } },
       },
-    })
+    }))
 
     auditLog(session.userId, 'RECEIPT_CREATED', {
       magazineId: id,
@@ -90,6 +91,10 @@ export async function POST(request: NextRequest, { params }: RouteContext): Prom
 
     return Response.json(receipt, { status: 201 })
   } catch (err) {
+    const e = err as { code?: string; message?: string }
+    if (e?.code === 'SQLITE_BUSY' || e?.code === 'SQLITE_LOCKED' || (e?.message ?? '').includes('database is locked')) {
+      return Response.json({ error: 'Database is busy, please try again' }, { status: 503 })
+    }
     console.error('Create receipt error:', err)
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
@@ -130,14 +135,14 @@ export async function PUT(request: NextRequest, { params }: RouteContext): Promi
 
     const magazine = await db.magazine.findUnique({ where: { id } })
 
-    const updated = await db.issueReceipt.update({
+    const updated = await withRetry(() => db.issueReceipt.update({
       where: { id: lastReceipt.id },
       data: { receivedDate: new Date(receivedDate) },
       include: {
         receivedBy: { select: { name: true } },
         branch: { select: { name: true, code: true } },
       },
-    })
+    }))
 
     const oldDate = lastReceipt.receivedDate.toISOString().split('T')[0]
     const newDate = receivedDate.split('T')[0]
@@ -150,6 +155,10 @@ export async function PUT(request: NextRequest, { params }: RouteContext): Promi
 
     return Response.json(updated)
   } catch (err) {
+    const e = err as { code?: string; message?: string }
+    if (e?.code === 'SQLITE_BUSY' || e?.code === 'SQLITE_LOCKED' || (e?.message ?? '').includes('database is locked')) {
+      return Response.json({ error: 'Database is busy, please try again' }, { status: 503 })
+    }
     console.error('Update receipt error:', err)
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }

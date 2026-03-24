@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server'
 import db from '@/lib/db'
+import { withRetry } from '@/lib/db-retry'
 import { verifySession } from '@/lib/dal'
 import { auditLog } from '@/lib/logger'
 
@@ -33,7 +34,7 @@ export async function PUT(_request: NextRequest, { params }: RouteContext): Prom
       return Response.json({ error: 'Transfer is not pending' }, { status: 400 })
     }
 
-    await db.$transaction(async (tx) => {
+    await withRetry(() => db.$transaction(async (tx) => {
       // Restore sender's quantity
       const senderSub = await tx.branchMagazine.findUnique({
         where: {
@@ -70,7 +71,7 @@ export async function PUT(_request: NextRequest, { params }: RouteContext): Prom
           cancelledAt: new Date(),
         },
       })
-    })
+    }))
 
     auditLog(session.userId, 'TRANSFER_CANCELLED', {
       transferId: id,
@@ -85,6 +86,10 @@ export async function PUT(_request: NextRequest, { params }: RouteContext): Prom
 
     return Response.json({ success: true })
   } catch (err) {
+    const e = err as { code?: string; message?: string }
+    if (e?.code === 'SQLITE_BUSY' || e?.code === 'SQLITE_LOCKED' || (e?.message ?? '').includes('database is locked')) {
+      return Response.json({ error: 'Database is busy, please try again' }, { status: 503 })
+    }
     console.error('Cancel transfer error:', err)
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }

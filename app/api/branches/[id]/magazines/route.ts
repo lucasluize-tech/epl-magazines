@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server'
 import db from '@/lib/db'
+import { withRetry } from '@/lib/db-retry'
 import { verifySession } from '@/lib/dal'
 import { auditLog } from '@/lib/logger'
 
@@ -64,11 +65,11 @@ export async function POST(request: NextRequest, { params }: RouteContext): Prom
     const magazine = await db.magazine.findUnique({ where: { id: magazineId } })
     if (!magazine) return Response.json({ error: 'Magazine not found' }, { status: 404 })
 
-    const subscription = await db.branchMagazine.upsert({
+    const subscription = await withRetry(() => db.branchMagazine.upsert({
       where: { branchId_magazineId: { branchId: id, magazineId } },
       update: { active: true, quantity },
       create: { branchId: id, magazineId, quantity },
-    })
+    }))
 
     auditLog(session.userId, 'BRANCH_MAGAZINE_ADDED', {
       branchId: id,
@@ -80,6 +81,10 @@ export async function POST(request: NextRequest, { params }: RouteContext): Prom
 
     return Response.json(subscription, { status: 201 })
   } catch (err) {
+    const e = err as { code?: string; message?: string }
+    if (e?.code === 'SQLITE_BUSY' || e?.code === 'SQLITE_LOCKED' || (e?.message ?? '').includes('database is locked')) {
+      return Response.json({ error: 'Database is busy, please try again' }, { status: 503 })
+    }
     console.error('Add branch magazine error:', err)
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }

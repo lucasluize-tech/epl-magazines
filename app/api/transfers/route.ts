@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server'
 import db from '@/lib/db'
+import { withRetry } from '@/lib/db-retry'
 import { verifySession } from '@/lib/dal'
 import { resolveActiveBranchId } from '@/lib/branch'
 import { auditLog } from '@/lib/logger'
@@ -89,7 +90,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     // Atomic transaction: decrement sender quantity + create transfer
-    const transfer = await db.$transaction(async (tx) => {
+    const transfer = await withRetry(() => db.$transaction(async (tx) => {
       // Decrement with race-condition guard
       const updated = await tx.branchMagazine.updateMany({
         where: {
@@ -119,7 +120,7 @@ export async function POST(request: NextRequest): Promise<Response> {
           initiatedBy: { select: { name: true } },
         },
       })
-    })
+    }))
 
     auditLog(session.userId, 'TRANSFER_INITIATED', {
       transferId: transfer.id,
@@ -136,6 +137,10 @@ export async function POST(request: NextRequest): Promise<Response> {
   } catch (err) {
     if (err instanceof Error && err.message === 'INSUFFICIENT_QUANTITY') {
       return Response.json({ error: 'Insufficient quantity to transfer' }, { status: 400 })
+    }
+    const e = err as { code?: string; message?: string }
+    if (e?.code === 'SQLITE_BUSY' || e?.code === 'SQLITE_LOCKED' || (e?.message ?? '').includes('database is locked')) {
+      return Response.json({ error: 'Database is busy, please try again' }, { status: 503 })
     }
     console.error('Initiate transfer error:', err)
     return Response.json({ error: 'Internal server error' }, { status: 500 })

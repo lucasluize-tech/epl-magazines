@@ -1,6 +1,7 @@
 import bcrypt from 'bcrypt'
 import type { NextRequest } from 'next/server'
 import db from '@/lib/db'
+import { withRetry } from '@/lib/db-retry'
 import { verifySession } from '@/lib/dal'
 import { auditLog } from '@/lib/logger'
 import type { UserRole } from '@/types'
@@ -61,7 +62,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     const passwordHash = await bcrypt.hash(password, 10)
     const assignedRole: UserRole = role === 'ADMIN' ? 'ADMIN' : 'STAFF'
-    const user = await db.user.create({
+    const user = await withRetry(() => db.user.create({
       data: {
         name: name.trim(),
         email: email.toLowerCase().trim(),
@@ -69,11 +70,15 @@ export async function POST(request: NextRequest): Promise<Response> {
         role: assignedRole,
       },
       select: { id: true, name: true, email: true, role: true, active: true, createdAt: true },
-    })
+    }))
 
     auditLog(session.userId, 'USER_CREATED', { newUserId: user.id, email: user.email, role: user.role })
     return Response.json(user, { status: 201 })
   } catch (err) {
+    const e = err as { code?: string; message?: string }
+    if (e?.code === 'SQLITE_BUSY' || e?.code === 'SQLITE_LOCKED' || (e?.message ?? '').includes('database is locked')) {
+      return Response.json({ error: 'Database is busy, please try again' }, { status: 503 })
+    }
     console.error('Create user error:', err)
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
