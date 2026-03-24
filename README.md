@@ -1,0 +1,125 @@
+# 📦 EPL Magazine Tracker
+
+![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
+![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue?logo=typescript)
+![SQLite](https://img.shields.io/badge/Database-SQLite-003B57?logo=sqlite)
+![License](https://img.shields.io/badge/License-Private-red)
+
+> *Your documentation is a direct reflection of your software, so hold it to the same standards.*
+
+
+## 🌟 Highlights
+
+- Track periodical magazine receipts across multiple library branches
+- Automatic overdue detection based on each magazine's publication cadence (weekly, bi-weekly, monthly, bi-monthly, seasonal)
+- Dashboard view with at-a-glance status: overdue, expected this week, and upcoming
+- Role-based access control — staff mark receipts, admins manage magazines and users
+- Admin data reports: Oversight, Accountability, and Operations metrics
+- Full audit logging of every meaningful action
+- Zero external dependencies beyond the app itself — SQLite database, file-based logs, no third-party services
+
+
+## ℹ️ Overview
+
+EPL Magazine Tracker is an internal web application built for Edison Public Library staff to manage periodical magazine subscriptions and receipts. When magazines arrive at a branch, staff log the receipt; the system then tracks each title's publication cadence, flags overdue issues, and shows what's expected each week. Admins also have access to data reports covering Oversight, Accountability, and Operations metrics.
+
+The application is designed for internal LAN deployment only via Docker Compose. It uses SQLite for storage (no database server needed), JWT-based session authentication, and file-based audit logging — keeping infrastructure simple and self-contained.
+
+### Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | Next.js 16 (App Router) |
+| Language | TypeScript (`strict: true`) |
+| Database | SQLite via Prisma ORM v7 |
+| Auth | JWT sessions with jose + bcrypt |
+| Styling | Tailwind CSS + shadcn/ui |
+| Audit Log | Winston (JSON lines to file) |
+
+
+## ⬇️ Installation
+
+### Prerequisites
+
+- **Node.js** 18+
+- **npm** 9+
+- **Docker** and **Docker Compose** (for production deployment)
+
+### Local Development Setup
+
+```bash
+# Clone the repository
+git clone <repo-url>
+cd epl-magazines
+
+# Install dependencies
+npm install
+
+# Set up environment variables
+cp .env.example .env.local
+# Edit .env.local and set SESSION_SECRET:
+#   SESSION_SECRET=$(openssl rand -base64 32)
+
+# Generate Prisma client and run migrations
+npx prisma generate
+npx prisma migrate dev
+
+# Seed the database with sample data
+npm run seed
+
+# Start the development server
+npm run dev
+```
+
+The app will be available at `http://localhost:3000`.
+
+### Docker Deployment
+
+```bash
+docker compose up -d
+```
+
+This mounts `prisma/` (SQLite database) and `logs/` (audit log) as volumes for persistence. Back up by copying `prisma/dev.db` and `logs/audit.log`.
+
+
+## 🚀 Usage
+
+1. **Log in** with your credentials at `/login`
+2. **Select your branch** from the branch selector in the sidebar
+3. **View the dashboard** to see overdue, expected this week, and upcoming magazines
+4. **Mark a magazine as received** from the magazines list when it arrives
+5. **Admin users** can manage magazines, users, and view the audit log from the admin panel
+
+### Staff Workflow
+
+| Action | Where |
+|---|---|
+| See what's overdue or expected | Dashboard (`/dashboard`) |
+| Mark a magazine as received | Magazines (`/magazines`) |
+| View receipt history for a title | Magazine detail (`/magazines/[id]`) |
+
+### Admin Actions
+
+| Action | Where |
+|---|---|
+| Create, edit, or delete magazines | Admin > Magazines (`/admin/magazines`) |
+| Manage users | Admin > Users (`/admin/users`) |
+| View audit log | Log (`/log`) |
+| View data reports (Oversight, Accountability, Operations) | Admin > Reports (`/admin/reports`) |
+
+
+## ✍️ Authors
+
+**Edison Public Library** — Internal Tools Team
+
+Built and maintained by library staff for library staff.
+
+
+## 💭 Feedback and Contributing
+
+This is an internal project for EPL. If you're a team member:
+
+- **Bug reports and feature requests**: Open an issue in the repository
+- **Questions or discussion**: Reach out to the Internal Tools team
+
+Contributions from team members are welcome. Please ensure all code follows the project's TypeScript strict mode conventions and includes appropriate TSDoc comments on exported functions.
