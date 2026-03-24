@@ -127,9 +127,9 @@ export default async function DashboardPage() {
           className="text-3xl font-bold mb-1"
           style={{ fontFamily: 'var(--font-playfair)', color: 'oklch(0.15 0.028 62)' }}
         >
-          Magazine Dashboard
+          <span style={{ color: 'oklch(0.50 0.035 72)' }}>Dashboard for </span>
           {currentBranch && (
-            <span style={{ color: 'oklch(0.50 0.035 72)' }}> {currentBranch.name}</span>
+            <span className="underline" style={{ color: 'oklch(0.15 0.028 62)' }}>{currentBranch.name}</span>
           )}
         </h1>
         <p style={{ color: 'oklch(0.50 0.035 72)' }}>

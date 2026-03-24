@@ -66,16 +66,6 @@ export default async function LoginPage() {
             />
           </div>
 
-          <h2
-            className="text-3xl font-bold mb-2"
-            style={{ fontFamily: 'var(--font-playfair)', color: 'oklch(0.15 0.028 62)' }}
-          >
-            Welcome back
-          </h2>
-          <p className="text-sm mb-8" style={{ color: 'oklch(0.50 0.035 72)' }}>
-            Sign in to manage the magazine collection
-          </p>
-
           <LoginForm branches={branches} />
         </div>
       </div>

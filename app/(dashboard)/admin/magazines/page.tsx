@@ -1,10 +1,12 @@
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { getUser } from '@/lib/dal'
 import { getActiveBranchId, getActiveBranches } from '@/lib/branch'
 import db from '@/lib/db'
 import { computeNextExpectedDate } from '@/lib/cadence'
 import AdminMagazinesClient from '@/components/AdminMagazinesClient'
+import MagazineSearch from '@/components/MagazineSearch'
 import type { BranchMagazineWithDetails } from '@/types'
 
 export const metadata: Metadata = { title: 'Manage Magazines — EPL Magazine Tracker' }
@@ -25,33 +27,34 @@ export default async function AdminMagazinesPage({ searchParams }: PageProps) {
   if (!branchId) redirect('/login')
 
   const params = await searchParams
+  const search = typeof params?.search === 'string' ? params.search.trim() : ''
   const page = Math.max(1, parseInt((typeof params?.page === 'string' ? params.page : undefined) || '1', 10))
 
   const branches = await getActiveBranches()
   const currentBranch = branches.find((b) => b.id === branchId)
 
-  // Count total subscriptions for pagination (include inactive so admin can toggle them)
-  const totalCount = await db.branchMagazine.count({
-    where: { branchId },
-  })
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE)
+  // Build where clause with optional search filter
+  const where = {
+    branchId,
+    ...(search ? { magazine: { name: { contains: search } } } : {}),
+  }
 
-  // Fetch paginated subscriptions with magazine data
+  const totalCount = await db.branchMagazine.count({ where })
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+  const currentPage = Math.min(page, totalPages)
+
   const subscriptions = await db.branchMagazine.findMany({
-    where: { branchId },
+    where,
     orderBy: [{ active: 'desc' }, { magazine: { name: 'asc' } }],
-    skip: (page - 1) * PAGE_SIZE,
+    skip: (currentPage - 1) * PAGE_SIZE,
     take: PAGE_SIZE,
-    include: {
-      magazine: true,
-    },
+    include: { magazine: true },
   })
 
   // Current year boundaries for Total Issues count
   const yearStart = new Date(new Date().getFullYear(), 0, 1)
   const yearEnd = new Date(new Date().getFullYear() + 1, 0, 1)
 
-  // Enrich each subscription with receipt stats
   const enriched: BranchMagazineWithDetails[] = await Promise.all(
     subscriptions.map(async (sub) => {
       const [totalIssues, lastReceipt] = await Promise.all([
@@ -89,27 +92,107 @@ export default async function AdminMagazinesPage({ searchParams }: PageProps) {
     })
   )
 
+  // All magazine names for search dropdown
+  const allSubMagazines = await db.branchMagazine.findMany({
+    where: { branchId },
+    select: { magazine: { select: { id: true, name: true } } },
+    orderBy: { magazine: { name: 'asc' } },
+  })
+  const allMagazineNames = allSubMagazines.map((s) => s.magazine)
+
+  // Total unfiltered count for display
+  const unfilteredCount = search
+    ? await db.branchMagazine.count({ where: { branchId } })
+    : totalCount
+
+  /** Build URL preserving current params */
+  function pageUrl(p: number): string {
+    const u = new URLSearchParams()
+    if (search) u.set('search', search)
+    if (p > 1) u.set('page', String(p))
+    const qs = u.toString()
+    return `/admin/magazines${qs ? `?${qs}` : ''}`
+  }
+
+  const startIdx = (currentPage - 1) * PAGE_SIZE
+
   return (
     <div className="p-8 max-w-6xl mx-auto">
-      <div className="mb-8">
+      <div className="mb-6">
         <h1
           className="text-3xl font-bold mb-1"
           style={{ fontFamily: 'var(--font-playfair)', color: 'oklch(0.15 0.028 62)' }}
         >
-          Manage Magazines
+          <span style={{ color: 'oklch(0.50 0.035 72)' }}>Manage Magazines for </span>
+          {currentBranch && (
+            <span className="underline" style={{ color: 'oklch(0.15 0.028 62)' }}>{currentBranch.name}</span>
+          )}
         </h1>
         <p style={{ color: 'oklch(0.50 0.035 72)' }}>
-          {totalCount} subscription{totalCount !== 1 ? 's' : ''} at {currentBranch?.name ?? 'this branch'}
+          {totalCount} of {unfilteredCount} subscription{unfilteredCount !== 1 ? 's' : ''}
         </p>
+      </div>
+
+      {/* Search bar */}
+      <div className="mb-6">
+        <MagazineSearch magazines={allMagazineNames} currentSearch={search} />
       </div>
 
       <AdminMagazinesClient
         magazines={enriched}
         branchId={branchId}
-        page={page}
-        totalPages={totalPages}
         branches={branches}
+        search={search}
       />
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-6">
+          <p className="text-sm" style={{ color: 'oklch(0.50 0.035 72)' }}>
+            Showing {startIdx + 1}–{Math.min(startIdx + PAGE_SIZE, totalCount)} of {totalCount}
+          </p>
+          <div className="flex items-center gap-1">
+            {currentPage > 1 && (
+              <Link
+                href={pageUrl(currentPage - 1)}
+                className="inline-flex items-center justify-center h-8 px-3 rounded-md border text-sm font-medium transition-colors hover:bg-black/[0.04]"
+                style={{ borderColor: 'oklch(0.876 0.016 88)', color: 'oklch(0.30 0.028 62)' }}
+              >
+                Previous
+              </Link>
+            )}
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+              p === currentPage ? (
+                <span
+                  key={p}
+                  className="inline-flex items-center justify-center w-8 h-8 rounded-md text-sm font-medium text-white"
+                  style={{ backgroundColor: 'oklch(0.38 0.082 156)' }}
+                >
+                  {p}
+                </span>
+              ) : (
+                <Link
+                  key={p}
+                  href={pageUrl(p)}
+                  className="inline-flex items-center justify-center w-8 h-8 rounded-md border text-sm font-medium transition-colors hover:bg-black/[0.04]"
+                  style={{ borderColor: 'oklch(0.876 0.016 88)', color: 'oklch(0.30 0.028 62)' }}
+                >
+                  {p}
+                </Link>
+              )
+            ))}
+            {currentPage < totalPages && (
+              <Link
+                href={pageUrl(currentPage + 1)}
+                className="inline-flex items-center justify-center h-8 px-3 rounded-md border text-sm font-medium transition-colors hover:bg-black/[0.04]"
+                style={{ borderColor: 'oklch(0.876 0.016 88)', color: 'oklch(0.30 0.028 62)' }}
+              >
+                Next
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
