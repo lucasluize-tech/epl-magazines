@@ -35,6 +35,7 @@ export interface EditMagazineDialogProps {
 }
 
 const CADENCES = Object.entries(CADENCE_LABELS)
+const LANGUAGES = ['English', 'Gujarati', 'Hindi', 'Tamil', 'Telugu']
 
 export default function EditMagazineDialog({ subscription, branchId, open, onOpenChange }: EditMagazineDialogProps) {
   const router = useRouter()
@@ -42,6 +43,7 @@ export default function EditMagazineDialog({ subscription, branchId, open, onOpe
   // Global fields
   const [name, setName] = useState('')
   const [cadence, setCadence] = useState('')
+  const [language, setLanguage] = useState('English')
   const [notes, setNotes] = useState('')
 
   // Branch-specific fields
@@ -54,6 +56,7 @@ export default function EditMagazineDialog({ subscription, branchId, open, onOpe
     if (subscription) {
       setName(subscription.magazine.name)
       setCadence(subscription.magazine.cadence)
+      setLanguage(subscription.magazine.language || 'English')
       setNotes(subscription.magazine.notes || '')
       setQuantity(subscription.quantity)
       setLastReceivedDate(
@@ -73,7 +76,7 @@ export default function EditMagazineDialog({ subscription, branchId, open, onOpe
       const magRes = await fetch(`/api/magazines/${subscription.magazineId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), cadence, notes: notes.trim() || null }),
+        body: JSON.stringify({ name: name.trim(), cadence, language, notes: notes.trim() || null }),
       })
 
       if (!magRes.ok) {
@@ -148,6 +151,15 @@ export default function EditMagazineDialog({ subscription, branchId, open, onOpe
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {CADENCES.map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Language</Label>
+            <Select value={language} onValueChange={(v) => setLanguage(v ?? 'English')}>
+              <SelectTrigger><SelectValue>{language}</SelectValue></SelectTrigger>
+              <SelectContent>
+                {LANGUAGES.map((lang) => <SelectItem key={lang} value={lang}>{lang}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>

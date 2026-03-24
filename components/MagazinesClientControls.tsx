@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { CalendarCheck, Filter, SendHorizontal } from 'lucide-react'
 import MarkReceivedDialog from './MarkReceivedDialog'
 import TransferDialog from './TransferDialog'
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 
 type FilterBarMode = {
   mode?: 'filter'
@@ -93,15 +94,23 @@ function RowActions({ magazine, activeBranchId, branches, senderQuantity }: {
         <CalendarCheck size={12} /> Received
       </Button>
       {senderQuantity > 0 && otherBranches.length > 0 && (
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-7 w-7 p-0"
-          onClick={() => setTransferOpen(true)}
-          title="Transfer"
-        >
-          <SendHorizontal size={13} style={{ color: 'oklch(0.45 0.082 156)' }} />
-        </Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 w-7 p-0"
+                  onClick={() => setTransferOpen(true)}
+                />
+              }
+            >
+              <SendHorizontal size={13} style={{ color: 'oklch(0.45 0.082 156)' }} />
+            </TooltipTrigger>
+            <TooltipContent>Transfer</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       )}
       <MarkReceivedDialog
         magazine={magazine}

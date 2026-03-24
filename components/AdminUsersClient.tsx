@@ -14,13 +14,15 @@ import {
 } from '@/components/ui/table'
 import CreateUserDialog from './CreateUserDialog'
 import DeleteConfirmDialog from './DeleteConfirmDialog'
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 
 export interface AdminUsersClientProps {
   users: AdminUser[]
   currentUserId: string
+  search?: string
 }
 
-export default function AdminUsersClient({ users, currentUserId }: AdminUsersClientProps) {
+export default function AdminUsersClient({ users, currentUserId, search }: AdminUsersClientProps) {
   const router = useRouter()
   const [createOpen, setCreateOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null)
@@ -78,7 +80,9 @@ export default function AdminUsersClient({ users, currentUserId }: AdminUsersCli
       {users.length === 0 ? (
         <div className="text-center py-20" style={{ color: 'oklch(0.60 0.025 72)' }}>
           <Users size={40} className="mx-auto mb-4 opacity-30" />
-          <p className="text-lg font-medium" style={{ fontFamily: 'var(--font-playfair)' }}>No users yet</p>
+          <p className="text-lg font-medium" style={{ fontFamily: 'var(--font-playfair)' }}>
+            {search ? 'No users match your search' : 'No users yet'}
+          </p>
         </div>
       ) : (
         <div
@@ -157,23 +161,29 @@ export default function AdminUsersClient({ users, currentUserId }: AdminUsersCli
                   <TableCell>
                     <div className="flex items-center justify-end gap-1.5">
                       {user.id !== currentUserId && (
-                        <>
+                        <TooltipProvider>
                           <Switch
                             checked={user.active}
                             onCheckedChange={() => toggleActive(user)}
                             disabled={togglingId === user.id}
                           />
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 w-7 p-0"
-                            onClick={() => setDeleteTarget(user)}
-                            title="Delete"
-                            disabled={deletingId === user.id}
-                          >
-                            <Trash2 size={14} style={{ color: 'oklch(0.56 0.225 27)' }} />
-                          </Button>
-                        </>
+                          <Tooltip>
+                            <TooltipTrigger
+                              render={
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 w-7 p-0"
+                                  onClick={() => setDeleteTarget(user)}
+                                  disabled={deletingId === user.id}
+                                />
+                              }
+                            >
+                              <Trash2 size={14} style={{ color: 'oklch(0.56 0.225 27)' }} />
+                            </TooltipTrigger>
+                            <TooltipContent>Delete</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       )}
                     </div>
                   </TableCell>

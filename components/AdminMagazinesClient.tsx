@@ -17,16 +17,16 @@ import CreateMagazineDialog from './CreateMagazineDialog'
 import EditMagazineDialog from './EditMagazineDialog'
 import AdminMagazineDeleteDialog from './AdminMagazineDeleteDialog'
 import TransferDialog from './TransferDialog'
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 
 export interface AdminMagazinesClientProps {
   magazines: BranchMagazineWithDetails[]
   branchId: string
-  page: number
-  totalPages: number
   branches: Branch[]
+  search?: string
 }
 
-export default function AdminMagazinesClient({ magazines, branchId, page, totalPages, branches }: AdminMagazinesClientProps) {
+export default function AdminMagazinesClient({ magazines, branchId, branches, search }: AdminMagazinesClientProps) {
   const router = useRouter()
   const [createOpen, setCreateOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<BranchMagazineWithDetails | null>(null)
@@ -92,9 +92,9 @@ export default function AdminMagazinesClient({ magazines, branchId, page, totalP
         <div className="text-center py-20" style={{ color: 'oklch(0.60 0.025 72)' }}>
           <BookMarked size={40} className="mx-auto mb-4 opacity-30" />
           <p className="text-lg font-medium" style={{ fontFamily: 'var(--font-playfair)' }}>
-            No magazines at this branch
+            {search ? 'No magazines match your search' : 'No magazines at this branch'}
           </p>
-          <p className="text-sm mt-1">Click &quot;Add Magazine&quot; to subscribe one.</p>
+          {!search && <p className="text-sm mt-1">Click &quot;Add Magazine&quot; to subscribe one.</p>}
         </div>
       ) : (
         <div
@@ -183,68 +183,61 @@ export default function AdminMagazinesClient({ magazines, branchId, page, totalP
                     />
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center justify-end gap-1.5">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 w-7 p-0"
-                        onClick={() => setTransferTarget(sub)}
-                        title="Transfer"
-                        disabled={sub.quantity < 1}
-                      >
-                        <SendHorizontal size={14} style={{ color: 'oklch(0.45 0.082 156)' }} />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 w-7 p-0"
-                        onClick={() => setEditTarget(sub)}
-                        title="Edit"
-                      >
-                        <Pencil size={14} style={{ color: 'oklch(0.45 0.082 156)' }} />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 w-7 p-0"
-                        onClick={() => setDeleteTarget(sub)}
-                        title="Delete"
-                      >
-                        <Trash2 size={14} style={{ color: 'oklch(0.56 0.225 27)' }} />
-                      </Button>
-                    </div>
+                    <TooltipProvider>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 w-7 p-0"
+                                onClick={() => setTransferTarget(sub)}
+                                disabled={sub.quantity < 1}
+                              />
+                            }
+                          >
+                            <SendHorizontal size={14} style={{ color: 'oklch(0.45 0.082 156)' }} />
+                          </TooltipTrigger>
+                          <TooltipContent>Transfer</TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 w-7 p-0"
+                                onClick={() => setEditTarget(sub)}
+                              />
+                            }
+                          >
+                            <Pencil size={14} style={{ color: 'oklch(0.45 0.082 156)' }} />
+                          </TooltipTrigger>
+                          <TooltipContent>Edit</TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 w-7 p-0"
+                                onClick={() => setDeleteTarget(sub)}
+                              />
+                            }
+                          >
+                            <Trash2 size={14} style={{ color: 'oklch(0.56 0.225 27)' }} />
+                          </TooltipTrigger>
+                          <TooltipContent>Delete</TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </TooltipProvider>
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
-        </div>
-      )}
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2 mt-6">
-          {page > 1 && (
-            <a
-              href={`?page=${page - 1}`}
-              className="px-4 py-2 rounded-md text-sm border transition-colors hover:bg-black/[0.04]"
-              style={{ borderColor: 'oklch(0.876 0.016 88)', color: 'oklch(0.38 0.082 156)' }}
-            >
-              ← Previous
-            </a>
-          )}
-          <span className="text-sm" style={{ color: 'oklch(0.50 0.035 72)' }}>
-            {page} / {totalPages}
-          </span>
-          {page < totalPages && (
-            <a
-              href={`?page=${page + 1}`}
-              className="px-4 py-2 rounded-md text-sm border transition-colors hover:bg-black/[0.04]"
-              style={{ borderColor: 'oklch(0.876 0.016 88)', color: 'oklch(0.38 0.082 156)' }}
-            >
-              Next →
-            </a>
-          )}
         </div>
       )}
 

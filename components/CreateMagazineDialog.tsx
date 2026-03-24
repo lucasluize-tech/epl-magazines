@@ -32,11 +32,13 @@ export interface CreateMagazineDialogProps {
 }
 
 const CADENCES = Object.entries(CADENCE_LABELS)
+const LANGUAGES = ['English', 'Gujarati', 'Hindi', 'Tamil', 'Telugu']
 
 export default function CreateMagazineDialog({ open, onOpenChange, branchId }: CreateMagazineDialogProps) {
   const router = useRouter()
   const [name, setName] = useState('')
   const [cadence, setCadence] = useState('')
+  const [language, setLanguage] = useState('English')
   const [notes, setNotes] = useState('')
   const [quantity, setQuantity] = useState(1)
   const [loading, setLoading] = useState(false)
@@ -44,6 +46,7 @@ export default function CreateMagazineDialog({ open, onOpenChange, branchId }: C
   function reset() {
     setName('')
     setCadence('')
+    setLanguage('English')
     setNotes('')
     setQuantity(1)
   }
@@ -58,7 +61,7 @@ export default function CreateMagazineDialog({ open, onOpenChange, branchId }: C
       const magRes = await fetch('/api/magazines', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), cadence, notes: notes.trim() || null }),
+        body: JSON.stringify({ name: name.trim(), cadence, language, notes: notes.trim() || null }),
       })
 
       const magData = (await magRes.json()) as { id?: string; error?: string }
@@ -105,7 +108,7 @@ export default function CreateMagazineDialog({ open, onOpenChange, branchId }: C
               id="mag-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. The Economist"
+              placeholder="e.g. The Economist (Language if any)"
               required
             />
           </div>
@@ -119,6 +122,20 @@ export default function CreateMagazineDialog({ open, onOpenChange, branchId }: C
               <SelectContent>
                 {CADENCES.map(([value, label]) => (
                   <SelectItem key={value} value={value}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="mag-language">Language</Label>
+            <Select value={language} onValueChange={(v) => setLanguage(v ?? 'English')}>
+              <SelectTrigger id="mag-language">
+                <SelectValue>{language}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {LANGUAGES.map((lang) => (
+                  <SelectItem key={lang} value={lang}>{lang}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
