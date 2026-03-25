@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "eslint",
     "seed": "tsx prisma/seed.ts",
-    "seed-test": "tsx prisma/seed_test.ts"
+    "seed-test": "tsx prisma/seed_test.ts",
+    "migrate:safe": "tsx scripts/migrate-safe.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
