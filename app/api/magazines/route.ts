@@ -1,61 +1,45 @@
 import type { NextRequest } from 'next/server'
 import db from '@/lib/db'
 import { withRetry } from '@/lib/db-retry'
-import { verifySession } from '@/lib/dal'
+import { verifySessionForApi } from '@/lib/dal'
 import { auditLog } from '@/lib/logger'
-import type { CadenceType } from '@/types'
-
-interface CreateMagazineBody {
-  name: string
-  cadence: string
-  language?: string
-  notes?: string
-}
-
-const VALID_CADENCES: CadenceType[] = ['WEEKLY', 'BI_WEEKLY', 'MONTHLY', 'BI_MONTHLY', 'SEASONAL']
-
-function isCadenceType(value: string): value is CadenceType {
-  return VALID_CADENCES.includes(value as CadenceType)
-}
+import { createMagazineSchema } from '@/lib/validations'
 
 /**
  * GET /api/magazines
  * Returns all active magazines ordered by name. Requires any authenticated session.
  */
 export async function GET(): Promise<Response> {
+  const session = await verifySessionForApi()
+  if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
   try {
-    await verifySession()
     const magazines = await db.magazine.findMany({
       where: { active: true },
       orderBy: { name: 'asc' },
     })
     return Response.json(magazines)
-  } catch {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  } catch (err) {
+    console.error('List magazines error:', err)
+    return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
 /**
  * POST /api/magazines
- * Creates a new magazine. ADMIN only. Body: { name, cadence, notes? }.
+ * Creates a new magazine. ADMIN only. Body: { name, cadence, language?, notes? }.
  * Returns 201 with the created magazine, or 400/403 on validation/auth failure.
  */
 export async function POST(request: NextRequest): Promise<Response> {
+  const session = await verifySessionForApi()
+  if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  if (session.role !== 'ADMIN') return Response.json({ error: 'Forbidden' }, { status: 403 })
   try {
-    const session = await verifySession()
-    if (session.role !== 'ADMIN') {
-      return Response.json({ error: 'Forbidden' }, { status: 403 })
+    const body = await request.json()
+    const parsed = createMagazineSchema.safeParse(body)
+    if (!parsed.success) {
+      return Response.json({ error: parsed.error.issues[0].message }, { status: 400 })
     }
-
-    const { name, cadence, language, notes } = (await request.json()) as CreateMagazineBody
-
-    if (!name?.trim() || !cadence) {
-      return Response.json({ error: 'Name and cadence are required' }, { status: 400 })
-    }
-
-    if (!isCadenceType(cadence)) {
-      return Response.json({ error: 'Invalid cadence' }, { status: 400 })
-    }
+    const { name, cadence, language, notes } = parsed.data
 
     /** Normalize language: "hindi" → "Hindi", "GUJARATI" → "Gujarati" */
     const normalizedLanguage = language?.trim()
