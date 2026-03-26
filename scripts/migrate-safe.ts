@@ -3,6 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import { execSync } from 'child_process'
 import { fileURLToPath } from 'url'
+import Database from 'better-sqlite3'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PROJECT_ROOT = path.resolve(__dirname, '..')
@@ -74,9 +75,32 @@ function cleanupTestDb(testPath: string): void {
   }
 }
 
+/**
+ * Checks if the database can be exclusively locked.
+ * Prisma migrate needs exclusive access — fails if the dev server or another process holds a connection.
+ */
+function checkDatabaseAvailable(): void {
+  let db: InstanceType<typeof Database> | null = null
+  try {
+    db = new Database(DB_PATH)
+    db.pragma('journal_mode = WAL')
+    // Try to start an exclusive transaction — this will fail if another process holds a lock
+    db.exec('BEGIN EXCLUSIVE')
+    db.exec('ROLLBACK')
+  } catch {
+    console.error('Database is locked. Stop the dev server (or any other process using the database) before running migrations.')
+    process.exit(1)
+  } finally {
+    db?.close()
+  }
+}
+
 // --- Main ---
 
 console.log('Safe Migration: backup > test > apply\n')
+
+// Preflight: ensure no other process is using the database
+checkDatabaseAvailable()
 
 // Step 1: Backup
 const backupPath = backupDatabase()
