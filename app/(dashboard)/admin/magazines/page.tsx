@@ -45,7 +45,7 @@ export default async function AdminMagazinesPage({ searchParams }: PageProps) {
 
   const subscriptions = await db.branchMagazine.findMany({
     where,
-    orderBy: [{ active: 'desc' }, { magazine: { name: 'asc' } }],
+    orderBy: { magazine: { name: 'asc' } },
     skip: (currentPage - 1) * PAGE_SIZE,
     take: PAGE_SIZE,
     include: { magazine: true },
