@@ -5,9 +5,16 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import type { Magazine } from '@/types'
 import { Button } from '@/components/ui/button'
-import { CalendarCheck, PackageCheck } from 'lucide-react'
+import { CalendarCheck, PackageCheck, Loader2 } from 'lucide-react'
 import MarkReceivedDialog from './MarkReceivedDialog'
-import DeleteConfirmDialog from './DeleteConfirmDialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog'
 
 export interface PendingTransferInfo {
   id: string
@@ -25,16 +32,22 @@ export default function MagazineDetailActions({ magazine, activeBranchId, pendin
   const router = useRouter()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
 
   async function completeTransfer() {
-    const res = await fetch(`/api/transfers/${pendingTransfer!.id}/complete`, { method: 'PUT' })
-    if (res.ok) {
-      toast.success(`Transfer received — ${pendingTransfer!.quantity} copy(s) of ${magazine.name}`)
-      setConfirmOpen(false)
-      router.refresh()
-    } else {
-      const data = (await res.json()) as { error?: string }
-      toast.error(data.error || 'Failed to complete transfer')
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/transfers/${pendingTransfer!.id}/complete`, { method: 'PUT' })
+      if (res.ok) {
+        toast.success(`Transfer received — ${pendingTransfer!.quantity} copy(s) of ${magazine.name}`)
+        setConfirmOpen(false)
+        router.refresh()
+      } else {
+        const data = (await res.json()) as { error?: string }
+        toast.error(data.error || 'Failed to complete transfer')
+      }
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -48,15 +61,35 @@ export default function MagazineDetailActions({ magazine, activeBranchId, pendin
         >
           <PackageCheck size={16} /> Receive Transfer
         </Button>
-        <DeleteConfirmDialog
-          open={confirmOpen}
-          onOpenChange={setConfirmOpen}
-          title={`Receive transfer of "${magazine.name}"?`}
-          description={`${pendingTransfer.quantity} copy(s) from ${pendingTransfer.fromBranchName}. This will mark the transfer as completed and record a receipt.`}
-          confirmLabel="Receive"
-          loadingLabel="Receiving..."
-          onConfirm={completeTransfer}
-        />
+        <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle style={{ fontFamily: 'var(--font-playfair)' }}>
+                Receive transfer of &quot;{magazine.name}&quot;?
+              </DialogTitle>
+              <DialogDescription>
+                {pendingTransfer.quantity} copy(s) from {pendingTransfer.fromBranchName}. This will mark the transfer as completed and record a receipt.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="pt-2">
+              <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={loading}>
+                Cancel
+              </Button>
+              <Button
+                onClick={completeTransfer}
+                disabled={loading}
+                className="gap-2"
+                style={{ backgroundColor: 'oklch(0.45 0.15 250)' }}
+              >
+                {loading ? (
+                  <><Loader2 size={15} className="animate-spin" /> Receiving...</>
+                ) : (
+                  <><PackageCheck size={15} /> Receive</>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </>
     )
   }
