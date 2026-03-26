@@ -2,33 +2,27 @@ import type { NextRequest } from 'next/server'
 import { Prisma } from '@/generated/prisma/client'
 import db from '@/lib/db'
 import { withRetry } from '@/lib/db-retry'
-import { verifySession } from '@/lib/dal'
+import { verifySessionForApi } from '@/lib/dal'
 import { auditLog } from '@/lib/logger'
+import { updateBranchMagazineSchema } from '@/lib/validations'
 
 type RouteContext = { params: Promise<{ id: string; magazineId: string }> }
-
-interface UpdateSubscriptionBody {
-  quantity?: number
-  active?: boolean
-}
 
 /**
  * PUT /api/branches/[id]/magazines/[magazineId]
  * Updates quantity or active status of a branch magazine subscription. ADMIN only.
  */
 export async function PUT(request: NextRequest, { params }: RouteContext): Promise<Response> {
+  const session = await verifySessionForApi()
+  if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  if (session.role !== 'ADMIN') return Response.json({ error: 'Forbidden' }, { status: 403 })
+
   try {
-    const session = await verifySession()
-    if (session.role !== 'ADMIN') {
-      return Response.json({ error: 'Forbidden' }, { status: 403 })
-    }
-
     const { id, magazineId } = await params
-    const body = (await request.json()) as UpdateSubscriptionBody
-
-    const validFields: { quantity?: number; active?: boolean } = {}
-    if (body.quantity !== undefined) validFields.quantity = body.quantity
-    if (body.active !== undefined) validFields.active = body.active
+    const body = await request.json()
+    const parsed = updateBranchMagazineSchema.safeParse(body)
+    if (!parsed.success) return Response.json({ error: parsed.error.issues[0].message }, { status: 400 })
+    const validFields = parsed.data
 
     const before = await db.branchMagazine.findUnique({
       where: { branchId_magazineId: { branchId: id, magazineId } },
@@ -61,6 +55,7 @@ export async function PUT(request: NextRequest, { params }: RouteContext): Promi
     if (e?.code === 'SQLITE_BUSY' || e?.code === 'SQLITE_LOCKED' || (e?.message ?? '').includes('database is locked')) {
       return Response.json({ error: 'Database is busy, please try again' }, { status: 503 })
     }
+    console.error('Update branch magazine error:', err)
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -70,12 +65,11 @@ export async function PUT(request: NextRequest, { params }: RouteContext): Promi
  * Removes a magazine subscription from a branch (hard delete). ADMIN only.
  */
 export async function DELETE(_request: NextRequest, { params }: RouteContext): Promise<Response> {
-  try {
-    const session = await verifySession()
-    if (session.role !== 'ADMIN') {
-      return Response.json({ error: 'Forbidden' }, { status: 403 })
-    }
+  const session = await verifySessionForApi()
+  if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  if (session.role !== 'ADMIN') return Response.json({ error: 'Forbidden' }, { status: 403 })
 
+  try {
     const { id, magazineId } = await params
 
     // Fetch names before deletion for audit log
@@ -100,6 +94,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteContext): P
     if (e?.code === 'SQLITE_BUSY' || e?.code === 'SQLITE_LOCKED' || (e?.message ?? '').includes('database is locked')) {
       return Response.json({ error: 'Database is busy, please try again' }, { status: 503 })
     }
+    console.error('Remove branch magazine error:', err)
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

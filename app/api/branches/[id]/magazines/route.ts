@@ -1,8 +1,9 @@
 import type { NextRequest } from 'next/server'
 import db from '@/lib/db'
 import { withRetry } from '@/lib/db-retry'
-import { verifySession } from '@/lib/dal'
+import { verifySessionForApi } from '@/lib/dal'
 import { auditLog } from '@/lib/logger'
+import { addBranchMagazineSchema } from '@/lib/validations'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -12,8 +13,10 @@ type RouteContext = { params: Promise<{ id: string }> }
  * Requires any authenticated session.
  */
 export async function GET(_request: NextRequest, { params }: RouteContext): Promise<Response> {
+  const session = await verifySessionForApi()
+  if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
   try {
-    await verifySession()
     const { id } = await params
 
     const branch = await db.branch.findUnique({ where: { id } })
@@ -30,14 +33,10 @@ export async function GET(_request: NextRequest, { params }: RouteContext): Prom
     })
 
     return Response.json(subscriptions)
-  } catch {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  } catch (err) {
+    console.error('List branch magazines error:', err)
+    return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
-}
-
-interface AddMagazineBody {
-  magazineId: string
-  quantity?: number
 }
 
 /**
@@ -46,18 +45,16 @@ interface AddMagazineBody {
  * Body: { magazineId: string, quantity?: number }
  */
 export async function POST(request: NextRequest, { params }: RouteContext): Promise<Response> {
+  const session = await verifySessionForApi()
+  if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  if (session.role !== 'ADMIN') return Response.json({ error: 'Forbidden' }, { status: 403 })
+
   try {
-    const session = await verifySession()
-    if (session.role !== 'ADMIN') {
-      return Response.json({ error: 'Forbidden' }, { status: 403 })
-    }
-
     const { id } = await params
-    const { magazineId, quantity = 1 } = (await request.json()) as AddMagazineBody
-
-    if (!magazineId) {
-      return Response.json({ error: 'magazineId is required' }, { status: 400 })
-    }
+    const body = await request.json()
+    const parsed = addBranchMagazineSchema.safeParse(body)
+    if (!parsed.success) return Response.json({ error: parsed.error.issues[0].message }, { status: 400 })
+    const { magazineId, quantity } = parsed.data
 
     const branch = await db.branch.findUnique({ where: { id } })
     if (!branch) return Response.json({ error: 'Branch not found' }, { status: 404 })
