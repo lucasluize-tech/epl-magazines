@@ -46,10 +46,19 @@ epl-magazines/
 │   │   ├── admin/
 │   │   │   ├── magazines/
 │   │   │   │   └── page.tsx       # Admin: create/edit/delete magazines
-│   │   │   └── users/
-│   │   │       └── page.tsx       # Admin: create/delete users
-│   │   └── log/
-│   │       └── page.tsx           # View audit log (admin only)
+│   │   │   ├── users/
+│   │   │   │   └── page.tsx       # Admin: create/delete users
+│   │   │   ├── transfers/
+│   │   │   │   └── page.tsx       # Admin: manage inter-branch transfers
+│   │   │   └── reports/
+│   │   │       ├── page.tsx       # Admin: reports dashboard (5 tabs, Recharts)
+│   │   │       └── export/
+│   │   │           └── route.ts   # GET .xlsx export
+│   │   ├── profile/
+│   │   │   └── page.tsx           # User profile page
+│   │   ├── log/
+│   │   │   └── page.tsx           # View audit log (admin only)
+│   │   └── error.tsx              # Error boundary
 │   └── api/
 │       ├── auth/
 │       │   ├── login/route.ts
@@ -61,15 +70,26 @@ epl-magazines/
 │       │           ├── route.ts   # GET/POST branch magazine subscriptions
 │       │           └── [magazineId]/
 │       │               └── route.ts # PUT/DELETE branch subscription
+│       ├── health/
+│       │   └── route.ts           # GET health check (unauthenticated, Docker)
 │       ├── magazines/
 │       │   ├── route.ts           # GET list, POST create
 │       │   └── [id]/
 │       │       ├── route.ts       # GET, PUT, DELETE
 │       │       └── receipts/
 │       │           └── route.ts   # POST mark-received, GET history
+│       ├── transfers/
+│       │   ├── route.ts           # GET list, POST create transfer
+│       │   └── [id]/
+│       │       ├── complete/
+│       │       │   └── route.ts   # POST complete transfer
+│       │       └── cancel/
+│       │           └── route.ts   # POST cancel transfer
 │       └── users/
 │           ├── route.ts           # GET list, POST create (admin)
-│           └── [id]/route.ts      # DELETE (admin)
+│           ├── [id]/route.ts      # DELETE (admin)
+│           └── profile/
+│               └── route.ts       # GET/PUT user profile
 ├── types/
 │   └── index.ts                   # Shared domain types (import from '@/types')
 ├── lib/
@@ -78,6 +98,8 @@ epl-magazines/
 │   ├── logger.ts                  # Winston audit logger
 │   ├── branch.ts                  # Branch cookie helper: resolveActiveBranchId, getActiveBranches
 │   ├── cadence.ts                 # computeNextExpectedDate, isOverdue helpers
+│   ├── reports.ts                 # Report data queries (5 report types)
+│   ├── db-retry.ts                # withRetry() for transient SQLite BUSY/LOCKED errors
 │   ├── utils.ts                   # cn() helper for Tailwind class merging
 │   └── db.ts                      # Prisma client singleton
 ├── components/
@@ -86,7 +108,7 @@ epl-magazines/
 │   ├── MagazineCard.tsx
 │   ├── Sidebar.tsx
 │   └── ...                        # All components as .tsx with Props interfaces
-├── docs/                          # 9 documentation files for non-TS peers
+├── docs/                          # Documentation files for non-TS peers
 ├── proxy.ts                       # Route protection (redirect unauthed → /login)
 ├── generated/
 │   └── prisma/                   # Generated Prisma client (git-ignored, run `npx prisma generate`)
@@ -96,6 +118,8 @@ epl-magazines/
 │   └── seed.ts                   # Database seed script
 ├── logs/
 │   └── audit.log                 # Winston output (git-ignored, Docker volume)
+├── scripts/
+│   └── migrate-safe.ts           # Safe migration: backup → test → apply
 ├── .env.local                    # Secrets (git-ignored)
 ├── docker-compose.yml
 └── Dockerfile
@@ -107,14 +131,17 @@ epl-magazines/
 
 ```prisma
 model User {
-  id           String        @id @default(cuid())
+  id           String         @id @default(cuid())
   name         String
-  email        String        @unique
+  email        String         @unique
   passwordHash String
-  role         Role          @default(STAFF)
-  active       Boolean       @default(true)
-  createdAt    DateTime      @default(now())
-  receipts     IssueReceipt[]
+  role         Role           @default(STAFF)
+  active       Boolean        @default(true)
+  createdAt    DateTime       @default(now())
+  receipts             IssueReceipt[]
+  transfersInitiated   Transfer[]     @relation("TransferInitiated")
+  transfersCompleted   Transfer[]     @relation("TransferCompleted")
+  transfersCancelled   Transfer[]     @relation("TransferCancelled")
 }
 
 enum Role {
@@ -142,6 +169,13 @@ enum Cadence {
   MONTHLY      // every ~1 month (calendar)
   BI_MONTHLY   // every ~2 months (calendar)
   SEASONAL     // every ~3 months (quarterly)
+  YEARLY       // every 12 months
+}
+
+enum TransferStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
 }
 
 model Branch {
@@ -151,7 +185,9 @@ model Branch {
   active    Boolean           @default(true)
   createdAt DateTime          @default(now())
   magazines BranchMagazine[]
-  receipts  IssueReceipt[]
+  receipts      IssueReceipt[]
+  transfersFrom Transfer[]     @relation("TransferFrom")
+  transfersTo   Transfer[]     @relation("TransferTo")
 }
 
 model BranchMagazine {
@@ -179,6 +215,27 @@ model IssueReceipt {
   notes        String?
   createdAt    DateTime @default(now())
 }
+
+model Transfer {
+  id             String         @id @default(cuid())
+  magazine       Magazine       @relation(fields: [magazineId], references: [id])
+  magazineId     String
+  fromBranch     Branch         @relation("TransferFrom", fields: [fromBranchId], references: [id])
+  fromBranchId   String
+  toBranch       Branch         @relation("TransferTo", fields: [toBranchId], references: [id])
+  toBranchId     String
+  quantity       Int
+  status         TransferStatus @default(PENDING)
+  initiatedBy    User           @relation("TransferInitiated", fields: [initiatedById], references: [id])
+  initiatedById  String
+  completedBy    User?          @relation("TransferCompleted", fields: [completedById], references: [id])
+  completedById  String?
+  cancelledBy    User?          @relation("TransferCancelled", fields: [cancelledById], references: [id])
+  cancelledById  String?
+  createdAt      DateTime       @default(now())
+  completedAt    DateTime?
+  cancelledAt    DateTime?
+}
 ```
 
 ---
@@ -197,10 +254,11 @@ is used as the anchor to compute the next expected date.
 | MONTHLY | + 1 calendar month |
 | BI_MONTHLY | + 2 calendar months |
 | SEASONAL | + 3 calendar months |
+| YEARLY | + 12 calendar months |
 
 ```ts
 // lib/cadence.ts
-import { addDays, addMonths } from 'date-fns'
+import { addDays, addMonths, addYears } from 'date-fns'
 
 const CADENCE_OFFSETS = {
   WEEKLY:     (d) => addDays(d, 7),
@@ -208,6 +266,7 @@ const CADENCE_OFFSETS = {
   MONTHLY:    (d) => addMonths(d, 1),
   BI_MONTHLY: (d) => addMonths(d, 2),
   SEASONAL:   (d) => addMonths(d, 3),
+  YEARLY:     (d) => addYears(d, 1),
 }
 
 export function computeNextExpectedDate(lastReceivedDate, cadence) {
@@ -314,8 +373,12 @@ services:
     restart: unless-stopped
 ```
 
+**Health monitoring**: The Dockerfile includes a `HEALTHCHECK` that polls `GET /api/health` every 30s.
+Combined with `restart: unless-stopped`, Docker will restart an unhealthy container automatically.
+
 **Backups**: The SQLite file lives at `prisma/dev.db` and the audit log at `logs/audit.log`.
 Both are mounted as Docker volumes. Back them up by copying these two files.
+Use `npm run migrate:safe` before applying schema migrations — it backs up the DB first.
 
 ---
 
@@ -328,6 +391,7 @@ npx tsx prisma/seed_test.ts  # Run test seed with demo data (destroys existing d
 npx prisma studio    # Visual DB browser
 npx prisma migrate dev --name <name>   # Create and run migration
 npx prisma generate  # Regenerate Prisma client after schema change
+npm run migrate:safe  # Safe migration: backup DB → test on copy → apply (stop dev server first)
 npx prisma migrate reset --force       # Reset DB + reseed (requires user consent, see Gotchas)
 rm prisma/dev.db && npx prisma migrate dev && npm run seed  # Full reset (delete + recreate + seed)
 ```

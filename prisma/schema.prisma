@@ -46,6 +46,7 @@ enum Cadence {
   MONTHLY
   BI_MONTHLY
   SEASONAL
+  YEARLY
 }
 
 enum TransferStatus {

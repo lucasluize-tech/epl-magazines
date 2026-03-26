@@ -11,7 +11,7 @@
 export type UserRole = 'ADMIN' | 'STAFF'
 
 /** Publication cadence — drives next-expected-date calculations */
-export type CadenceType = 'WEEKLY' | 'BI_WEEKLY' | 'MONTHLY' | 'BI_MONTHLY' | 'SEASONAL'
+export type CadenceType = 'WEEKLY' | 'BI_WEEKLY' | 'MONTHLY' | 'BI_MONTHLY' | 'SEASONAL' | 'YEARLY'
 
 /** Dashboard status bucket for a magazine */
 export type MagazineStatus = 'overdue' | 'this_week' | 'upcoming' | 'never_received'

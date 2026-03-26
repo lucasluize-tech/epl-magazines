@@ -1,4 +1,4 @@
-import { addDays, addMonths, startOfWeek, endOfWeek } from 'date-fns'
+import { addDays, addMonths, addYears, startOfWeek, endOfWeek } from 'date-fns'
 import type { CadenceType, MagazineStatus } from '@/types'
 
 /** Maps each cadence to a function that advances a date by one period */
@@ -8,6 +8,7 @@ const CADENCE_OFFSETS: Record<CadenceType, (d: Date) => Date> = {
   MONTHLY:   (d) => addMonths(d, 1),
   BI_MONTHLY:(d) => addMonths(d, 2),
   SEASONAL:  (d) => addMonths(d, 3),
+  YEARLY:    (d) => addYears(d, 1),
 }
 
 /** Human-readable labels for each cadence value */
@@ -17,6 +18,7 @@ export const CADENCE_LABELS: Record<CadenceType, string> = {
   MONTHLY:   'Monthly',
   BI_MONTHLY:'Bi-Monthly',
   SEASONAL:  'Seasonal',
+  YEARLY:    'Yearly',
 }
 
 /**
