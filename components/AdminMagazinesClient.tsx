@@ -16,7 +16,7 @@ import {
 import { CADENCE_LABELS } from '@/lib/cadence'
 import CreateMagazineDialog from './CreateMagazineDialog'
 import EditMagazineDialog from './EditMagazineDialog'
-import AdminMagazineDeleteDialog from './AdminMagazineDeleteDialog'
+import DeleteConfirmDialog from './DeleteConfirmDialog'
 import TransferDialog from './TransferDialog'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 
@@ -62,18 +62,6 @@ export default function AdminMagazinesClient({ magazines, branchId, branches, se
       router.refresh()
     } else {
       toast.error('Failed to remove subscription')
-    }
-  }
-
-  async function deleteEntirely(sub: BranchMagazineWithDetails) {
-    const res = await fetch(`/api/magazines/${sub.magazineId}`, { method: 'DELETE' })
-    if (res.ok) {
-      toast.success(`${sub.magazine.name} deleted entirely`)
-      setDeleteTarget(null)
-      router.refresh()
-    } else {
-      const data = (await res.json()) as { error?: string }
-      toast.error(data.error || 'Failed to delete magazine')
     }
   }
 
@@ -178,11 +166,23 @@ export default function AdminMagazinesClient({ magazines, branchId, branches, se
                     </span>
                   </TableCell>
                   <TableCell>
-                    <Switch
-                      checked={sub.active}
-                      onCheckedChange={() => toggleActive(sub)}
-                      disabled={togglingId === sub.id}
-                    />
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger render={<div className="inline-flex" />}>
+                          <div
+                            className="inline-flex cursor-pointer rounded-full transition-shadow hover:shadow-[0_0_8px_oklch(0.38_0.082_156_/_0.4)]"
+                            onClick={() => !togglingId && toggleActive(sub)}
+                          >
+                            <Switch
+                              checked={sub.active}
+                              onCheckedChange={() => toggleActive(sub)}
+                              disabled={togglingId === sub.id}
+                            />
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>{sub.active ? 'Deactivate' : 'Activate'}</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </TableCell>
                   <TableCell>
                     <TooltipProvider>
@@ -231,7 +231,7 @@ export default function AdminMagazinesClient({ magazines, branchId, branches, se
                           >
                             <Trash2 size={14} style={{ color: 'oklch(0.56 0.225 27)' }} />
                           </TooltipTrigger>
-                          <TooltipContent>Delete</TooltipContent>
+                          <TooltipContent>Remove from branch</TooltipContent>
                         </Tooltip>
                       </div>
                     </TooltipProvider>
@@ -266,12 +266,14 @@ export default function AdminMagazinesClient({ magazines, branchId, branches, se
       )}
 
       {deleteTarget && (
-        <AdminMagazineDeleteDialog
+        <DeleteConfirmDialog
           open={!!deleteTarget}
           onOpenChange={(v) => { if (!v) setDeleteTarget(null) }}
-          magazineName={deleteTarget.magazine.name}
-          onRemoveFromBranch={() => removeFromBranch(deleteTarget)}
-          onDeleteEntirely={() => deleteEntirely(deleteTarget)}
+          title={`Remove "${deleteTarget.magazine.name}"?`}
+          description="This will remove the magazine subscription from this branch. Receipt history is preserved."
+          confirmLabel="Remove"
+          loadingLabel="Removing..."
+          onConfirm={() => removeFromBranch(deleteTarget)}
         />
       )}
     </>
