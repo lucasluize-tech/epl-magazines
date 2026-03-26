@@ -24,6 +24,23 @@ export const verifySession = cache(async (): Promise<SessionUser> => {
 })
 
 /**
+ * Verifies the current session cookie for API route handlers.
+ * Returns `null` instead of redirecting — API routes must handle 401 explicitly.
+ * Cached per request via React's `cache()`.
+ */
+export const verifySessionForApi = cache(async (): Promise<SessionUser | null> => {
+  const cookieStore = await cookies()
+  const cookie = cookieStore.get('session')?.value
+  const session = await decrypt(cookie)
+
+  if (!session?.userId) {
+    return null
+  }
+
+  return { userId: session.userId as string, role: session.role }
+})
+
+/**
  * Returns the full authenticated user record.
  * Redirects to /login if the session is invalid or the user is inactive.
  * Cached per request via React's `cache()`.
