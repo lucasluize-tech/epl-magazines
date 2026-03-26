@@ -102,6 +102,7 @@ Back up by copying `prisma/dev.db` and `logs/audit.log`. Before applying schema 
 |---|---|
 | See what's overdue or expected | Dashboard (`/dashboard`) |
 | Mark a magazine as received | Magazines (`/magazines`) |
+| Receive a pending transfer | Magazine detail (`/magazines/[id]`) — blue "Receive Transfer" button appears automatically |
 | View receipt history for a title | Magazine detail (`/magazines/[id]`) |
 
 ### Admin Actions

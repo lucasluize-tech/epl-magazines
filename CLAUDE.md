@@ -294,6 +294,14 @@ For each active magazine **subscribed at the active branch** (via `BranchMagazin
    - **Expected this week**: `today ≤ nextExpectedDate ≤ today + 7`
    - **Upcoming**: `nextExpectedDate > today + 7`
 
+### Magazine Detail — Transfer-Aware Receive
+
+On the magazine detail page (`/magazines/[id]`), the action button is context-aware:
+- **If a pending transfer exists** to the active branch for this magazine: a blue "Receive Transfer" button replaces "Mark Received". It calls `PUT /api/transfers/[id]/complete`, which atomically creates a receipt, updates branch quantity, and marks the transfer COMPLETED. Only the oldest pending transfer is shown.
+- **If no pending transfer**: the normal green "Mark Received" button shows.
+
+This prevents staff from creating a manual receipt when they should be completing a transfer.
+
 ---
 
 ## Auth & Sessions
@@ -312,6 +320,7 @@ For each active magazine **subscribed at the active branch** (via `BranchMagazin
 |---|---|---|
 | View dashboard | ✓ | ✓ |
 | Mark magazine received | ✓ | ✓ |
+| Receive pending transfer | ✓ | ✓ |
 | View receipt history | ✓ | ✓ |
 | Create / edit / deactivate magazine | ✗ | ✓ |
 | Create / delete users | ✗ | ✓ |
