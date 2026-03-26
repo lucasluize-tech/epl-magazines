@@ -19,7 +19,8 @@ export async function POST(): Promise<Response> {
 
     await deleteSession()
     return Response.json({ success: true })
-  } catch {
+  } catch (err) {
+    console.error('Logout error:', err)
     return Response.json({ success: true })
   }
 }

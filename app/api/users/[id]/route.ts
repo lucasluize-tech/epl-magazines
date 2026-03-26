@@ -2,38 +2,31 @@ import type { NextRequest } from 'next/server'
 import { Prisma } from '@/generated/prisma/client'
 import db from '@/lib/db'
 import { withRetry } from '@/lib/db-retry'
-import { verifySession } from '@/lib/dal'
+import { verifySessionForApi } from '@/lib/dal'
 import { auditLog } from '@/lib/logger'
-import type { UserRole } from '@/types'
+import { updateUserSchema } from '@/lib/validations'
 
 type RouteContext = { params: Promise<{ id: string }> }
-
-interface UpdateUserBody {
-  active?: boolean
-  role?: UserRole
-}
 
 /**
  * PUT /api/users/[id]
  * Updates a user's active status and/or role. ADMIN only.
  * Admins cannot modify their own account via this endpoint.
- * Body: { active?: boolean, role?: UserRole }.
+ * Body: { active?: boolean, role?: 'ADMIN' | 'STAFF' }.
  */
 export async function PUT(request: NextRequest, { params }: RouteContext): Promise<Response> {
+  const session = await verifySessionForApi()
+  if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  if (session.role !== 'ADMIN') return Response.json({ error: 'Forbidden' }, { status: 403 })
   try {
-    const session = await verifySession()
-    if (session.role !== 'ADMIN') {
-      return Response.json({ error: 'Forbidden' }, { status: 403 })
-    }
     const { id } = await params
     if (id === session.userId) {
       return Response.json({ error: 'Cannot modify your own account here' }, { status: 400 })
     }
-
-    const body = (await request.json()) as UpdateUserBody
-    const validFields: Partial<UpdateUserBody> = {}
-    if (body.active !== undefined) validFields.active = body.active
-    if (body.role !== undefined) validFields.role = body.role
+    const body = await request.json()
+    const parsed = updateUserSchema.safeParse(body)
+    if (!parsed.success) return Response.json({ error: parsed.error.issues[0].message }, { status: 400 })
+    const validFields = parsed.data
 
     const targetUser = await db.user.findUnique({ where: { id }, select: { name: true, email: true } })
     await withRetry(() => db.user.update({ where: { id }, data: validFields }))
@@ -47,6 +40,7 @@ export async function PUT(request: NextRequest, { params }: RouteContext): Promi
     if (e?.code === 'SQLITE_BUSY' || e?.code === 'SQLITE_LOCKED' || (e?.message ?? '').includes('database is locked')) {
       return Response.json({ error: 'Database is busy, please try again' }, { status: 503 })
     }
+    console.error('Update user error:', err)
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -57,11 +51,10 @@ export async function PUT(request: NextRequest, { params }: RouteContext): Promi
  * Admins cannot delete their own account. Returns 404 if user does not exist.
  */
 export async function DELETE(_request: NextRequest, { params }: RouteContext): Promise<Response> {
+  const session = await verifySessionForApi()
+  if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  if (session.role !== 'ADMIN') return Response.json({ error: 'Forbidden' }, { status: 403 })
   try {
-    const session = await verifySession()
-    if (session.role !== 'ADMIN') {
-      return Response.json({ error: 'Forbidden' }, { status: 403 })
-    }
     const { id } = await params
     if (id === session.userId) {
       return Response.json({ error: 'Cannot delete your own account' }, { status: 400 })
@@ -78,6 +71,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteContext): P
     if (e?.code === 'SQLITE_BUSY' || e?.code === 'SQLITE_LOCKED' || (e?.message ?? '').includes('database is locked')) {
       return Response.json({ error: 'Database is busy, please try again' }, { status: 503 })
     }
+    console.error('Delete user error:', err)
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

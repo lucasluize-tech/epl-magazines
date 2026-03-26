@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server'
 import bcrypt from 'bcrypt'
 import db from '@/lib/db'
-import { verifySession } from '@/lib/dal'
+import { verifySessionForApi } from '@/lib/dal'
 import { auditLog } from '@/lib/logger'
 
 interface UpdateProfileBody {
@@ -16,8 +16,9 @@ interface UpdateProfileBody {
  * Password change requires current password verification.
  */
 export async function PUT(request: NextRequest): Promise<Response> {
+  const session = await verifySessionForApi()
+  if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
   try {
-    const session = await verifySession()
     const body = (await request.json()) as UpdateProfileBody
 
     const user = await db.user.findUnique({ where: { id: session.userId } })
@@ -68,7 +69,8 @@ export async function PUT(request: NextRequest): Promise<Response> {
     }
 
     return Response.json(updated)
-  } catch {
+  } catch (err) {
+    console.error('Update profile error:', err)
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
