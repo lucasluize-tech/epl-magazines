@@ -260,7 +260,7 @@ async function main() {
         branchId: bId,
         receivedById: admin.id,
         receivedDate: new Date(r.date),
-        notes: r.notes || null,
+        notes: (r.notes && r.notes.toLowerCase() !== 'x') ? r.notes : null,
       },
     })
     receiptCount++
