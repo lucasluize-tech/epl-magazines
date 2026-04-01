@@ -68,7 +68,7 @@ cp .env.example .env.local
 npx prisma generate
 npx prisma migrate dev
 
-# Seed the database with sample data
+# Seed the database with production data (magazines + historical receipts)
 npm run seed
 
 # Start the development server
@@ -110,6 +110,7 @@ Back up by copying `prisma/dev.db` and `logs/audit.log`. Before applying schema 
 | Action | Where |
 |---|---|
 | Create, edit, or deactivate magazines | Admin > Magazines (`/admin/magazines`) |
+| Filter magazines by cadence, language, or status | Admin > Magazines (`/admin/magazines`) |
 | Manage inter-branch transfers | Admin > Transfers (`/admin/transfers`) |
 | Manage users | Admin > Users (`/admin/users`) |
 | View audit log | Log (`/log`) |
