@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
+import { toLocalDate } from '@/lib/utils'
 import type { TransferWithDetails, TransferStatus } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -55,7 +56,8 @@ const FILTER_OPTIONS: { value: TransferStatus | 'ALL'; label: string }[] = [
  * @returns Formatted string like "Mar 20, 2026 14:30" or an em-dash for null
  */
 function fmt(date: Date | string | null): string {
-  return date ? format(new Date(date), 'MMM d, yyyy HH:mm') : '—'
+  const d = toLocalDate(date)
+  return d ? format(d, 'MMM d, yyyy HH:mm') : '—'
 }
 
 /**

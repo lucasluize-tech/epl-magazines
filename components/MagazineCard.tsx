@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { format } from 'date-fns'
+import { toLocalDate } from '@/lib/utils'
 import type { LucideIcon } from 'lucide-react'
 import type { MagazineStatus, MagazineWithStatus } from '@/types'
 import { CalendarCheck, CalendarX, Clock } from 'lucide-react'
@@ -57,7 +58,8 @@ const STATUS_STYLES: Record<MagazineStatus, StatusStyle> = {
 }
 
 function fmt(date: Date | string | null): string {
-  return date ? format(new Date(date), 'MMM d, yyyy') : '—'
+  const d = toLocalDate(date)
+  return d ? format(d, 'MMM d, yyyy') : '—'
 }
 
 export default function MagazineCard({ magazine, activeBranchId }: MagazineCardProps) {

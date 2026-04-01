@@ -4,6 +4,7 @@ import { useState, useEffect, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
+import { toLocalDate } from '@/lib/utils'
 import { Loader2, Save } from 'lucide-react'
 import type { BranchMagazineWithDetails } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -61,7 +62,7 @@ export default function EditMagazineDialog({ subscription, branchId, open, onOpe
       setQuantity(subscription.quantity)
       setLastReceivedDate(
         subscription.lastReceivedDate
-          ? format(new Date(subscription.lastReceivedDate), 'yyyy-MM-dd')
+          ? format(toLocalDate(subscription.lastReceivedDate)!, 'yyyy-MM-dd')
           : ''
       )
     }
@@ -100,7 +101,7 @@ export default function EditMagazineDialog({ subscription, branchId, open, onOpe
 
       // If lastReceivedDate changed, update the existing receipt (or create if none exists)
       const originalDate = subscription.lastReceivedDate
-        ? format(new Date(subscription.lastReceivedDate), 'yyyy-MM-dd')
+        ? format(toLocalDate(subscription.lastReceivedDate)!, 'yyyy-MM-dd')
         : ''
       if (lastReceivedDate && lastReceivedDate !== originalDate) {
         const method = subscription.lastReceivedDate ? 'PUT' : 'POST'

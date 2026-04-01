@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
+import { toLocalDate } from '@/lib/utils'
 import { Download } from 'lucide-react'
 import type {
   Branch,
@@ -118,7 +119,8 @@ const ACTIVE_COLORS = {
  * @returns Formatted string like "Mar 20, 2026" or an em-dash for null
  */
 function fmt(date: Date | string | null): string {
-  return date ? format(new Date(date), 'MMM d, yyyy') : '—'
+  const d = toLocalDate(date)
+  return d ? format(d, 'MMM d, yyyy') : '—'
 }
 
 // ---------------------------------------------------------------------------

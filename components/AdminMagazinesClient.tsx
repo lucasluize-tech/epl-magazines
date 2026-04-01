@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
+import { toLocalDate } from '@/lib/utils'
 import type { BranchMagazineWithDetails, Branch } from '@/types'
 import Link from 'next/link'
 import { Plus, Pencil, Trash2, BookMarked, SendHorizontal } from 'lucide-react'
@@ -148,15 +149,15 @@ export default function AdminMagazinesClient({ magazines, branchId, branches, se
                   </TableCell>
                   <TableCell>
                     <span className="text-xs" style={{ color: 'oklch(0.55 0.030 72)' }}>
-                      {sub.lastReceivedDate
-                        ? format(new Date(sub.lastReceivedDate), 'MMM d, yyyy')
+                      {toLocalDate(sub.lastReceivedDate)
+                        ? format(toLocalDate(sub.lastReceivedDate)!, 'MMM d, yyyy')
                         : 'Never'}
                     </span>
                   </TableCell>
                   <TableCell>
                     <span className="text-xs" style={{ color: 'oklch(0.55 0.030 72)' }}>
-                      {sub.nextExpectedDate
-                        ? format(new Date(sub.nextExpectedDate), 'MMM d, yyyy')
+                      {toLocalDate(sub.nextExpectedDate)
+                        ? format(toLocalDate(sub.nextExpectedDate)!, 'MMM d, yyyy')
                         : '—'}
                     </span>
                   </TableCell>
