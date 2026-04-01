@@ -36,7 +36,10 @@ async function decryptSession(session: string | undefined): Promise<SessionPaylo
  * @returns NextResponse with redirect or next() call
  */
 export async function proxy(request: NextRequest): Promise<NextResponse> {
-  const path = request.nextUrl.pathname
+  const { method, nextUrl: { pathname } } = request
+  console.log(`[${new Date().toISOString()}] ${method} ${pathname}`)
+
+  const path = pathname
   const isPublicRoute = publicRoutes.includes(path)
 
   const cookie = request.cookies.get('session')?.value
