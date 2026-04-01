@@ -1,13 +1,16 @@
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { addDays } from 'date-fns'
 import { getUser } from '@/lib/dal'
 import { getActiveBranchId, getActiveBranches } from '@/lib/branch'
 import db from '@/lib/db'
 import { computeNextExpectedDate } from '@/lib/cadence'
 import AdminMagazinesClient from '@/components/AdminMagazinesClient'
 import MagazineSearch from '@/components/MagazineSearch'
+import MagazineFilters from '@/components/MagazineFilters'
 import type { BranchMagazineWithDetails } from '@/types'
+import type { CadenceType } from '@/types'
 
 export const metadata: Metadata = { title: 'Manage Magazines — EPL Magazine Tracker' }
 
@@ -29,68 +32,121 @@ export default async function AdminMagazinesPage({ searchParams }: PageProps) {
   const params = await searchParams
   const search = typeof params?.search === 'string' ? params.search.trim() : ''
   const page = Math.max(1, parseInt((typeof params?.page === 'string' ? params.page : undefined) || '1', 10))
+  const cadenceFilter = typeof params?.cadence === 'string' ? params.cadence : ''
+  const languageFilter = typeof params?.language === 'string' ? params.language : ''
+  const statusFilter = typeof params?.status === 'string' ? params.status : ''
 
   const branches = await getActiveBranches()
   const currentBranch = branches.find((b) => b.id === branchId)
 
-  // Build where clause with optional search filter
+  // Build combined magazine where clause
+  const magazineWhere: Record<string, unknown> = {}
+  if (search) magazineWhere.name = { contains: search }
+  if (cadenceFilter) magazineWhere.cadence = cadenceFilter
+  if (languageFilter) magazineWhere.language = languageFilter
+
   const where = {
     branchId,
-    ...(search ? { magazine: { name: { contains: search } } } : {}),
+    ...(Object.keys(magazineWhere).length > 0 ? { magazine: magazineWhere } : {}),
   }
-
-  const totalCount = await db.branchMagazine.count({ where })
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
-  const currentPage = Math.min(page, totalPages)
-
-  const subscriptions = await db.branchMagazine.findMany({
-    where,
-    orderBy: { magazine: { name: 'asc' } },
-    skip: (currentPage - 1) * PAGE_SIZE,
-    take: PAGE_SIZE,
-    include: { magazine: true },
-  })
 
   // Current year boundaries for Total Issues count
   const yearStart = new Date(new Date().getFullYear(), 0, 1)
   const yearEnd = new Date(new Date().getFullYear() + 1, 0, 1)
 
-  const enriched: BranchMagazineWithDetails[] = await Promise.all(
-    subscriptions.map(async (sub) => {
-      const [totalIssues, lastReceipt] = await Promise.all([
-        db.issueReceipt.count({
-          where: {
-            magazineId: sub.magazineId,
-            branchId,
-            receivedDate: { gte: yearStart, lt: yearEnd },
-          },
-        }),
-        db.issueReceipt.findFirst({
-          where: { magazineId: sub.magazineId, branchId },
-          orderBy: { receivedDate: 'desc' },
-          select: { receivedDate: true },
-        }),
-      ])
+  /** Enrich a subscription with receipt stats */
+  async function enrichSubscription(sub: { id: string; branchId: string; magazineId: string; quantity: number; active: boolean; createdAt: Date; magazine: { id: string; name: string; cadence: CadenceType; language: string; active: boolean; notes: string | null; createdAt: Date; updatedAt: Date } }): Promise<BranchMagazineWithDetails> {
+    const [totalIssues, lastReceipt] = await Promise.all([
+      db.issueReceipt.count({
+        where: {
+          magazineId: sub.magazineId,
+          branchId,
+          receivedDate: { gte: yearStart, lt: yearEnd },
+        },
+      }),
+      db.issueReceipt.findFirst({
+        where: { magazineId: sub.magazineId, branchId },
+        orderBy: { receivedDate: 'desc' },
+        select: { receivedDate: true },
+      }),
+    ])
 
-      const lastReceivedDate = lastReceipt?.receivedDate ?? null
-      const nextExpectedDate = lastReceivedDate
-        ? computeNextExpectedDate(lastReceivedDate, sub.magazine.cadence)
-        : null
+    const lastReceivedDate = lastReceipt?.receivedDate ?? null
+    const nextExpectedDate = lastReceivedDate
+      ? computeNextExpectedDate(lastReceivedDate, sub.magazine.cadence)
+      : null
 
-      return {
-        id: sub.id,
-        branchId: sub.branchId,
-        magazineId: sub.magazineId,
-        quantity: sub.quantity,
-        active: sub.active,
-        createdAt: sub.createdAt,
-        magazine: sub.magazine,
-        totalIssues,
-        lastReceivedDate,
-        nextExpectedDate,
+    return {
+      id: sub.id,
+      branchId: sub.branchId,
+      magazineId: sub.magazineId,
+      quantity: sub.quantity,
+      active: sub.active,
+      createdAt: sub.createdAt,
+      magazine: sub.magazine,
+      totalIssues,
+      lastReceivedDate,
+      nextExpectedDate,
+    }
+  }
+
+  let enriched: BranchMagazineWithDetails[]
+  let totalCount: number
+  let totalPages: number
+  let currentPage: number
+
+  if (statusFilter) {
+    // Status is computed — fetch all matching, enrich, then filter and paginate
+    const allSubscriptions = await db.branchMagazine.findMany({
+      where,
+      orderBy: { magazine: { name: 'asc' } },
+      include: { magazine: true },
+    })
+
+    const allEnriched = await Promise.all(allSubscriptions.map(enrichSubscription))
+
+    const today = new Date()
+    const weekFromNow = addDays(today, 7)
+
+    const filtered = allEnriched.filter((item) => {
+      switch (statusFilter) {
+        case 'overdue':
+          return item.nextExpectedDate !== null && new Date(item.nextExpectedDate) < today
+        case 'expected':
+          return (
+            item.nextExpectedDate !== null &&
+            new Date(item.nextExpectedDate) >= today &&
+            new Date(item.nextExpectedDate) <= weekFromNow
+          )
+        case 'upcoming':
+          return item.nextExpectedDate !== null && new Date(item.nextExpectedDate) > weekFromNow
+        case 'never':
+          return item.lastReceivedDate === null
+        default:
+          return true
       }
     })
-  )
+
+    totalCount = filtered.length
+    totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+    currentPage = Math.min(page, totalPages)
+    enriched = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+  } else {
+    // No status filter — paginate at the DB level
+    totalCount = await db.branchMagazine.count({ where })
+    totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+    currentPage = Math.min(page, totalPages)
+
+    const subscriptions = await db.branchMagazine.findMany({
+      where,
+      orderBy: { magazine: { name: 'asc' } },
+      skip: (currentPage - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+      include: { magazine: true },
+    })
+
+    enriched = await Promise.all(subscriptions.map(enrichSubscription))
+  }
 
   // All magazine names for search dropdown
   const allSubMagazines = await db.branchMagazine.findMany({
@@ -100,15 +156,36 @@ export default async function AdminMagazinesPage({ searchParams }: PageProps) {
   })
   const allMagazineNames = allSubMagazines.map((s) => s.magazine)
 
+  // Distinct languages and cadences for filter dropdowns
+  const [distinctLanguages, distinctCadences] = await Promise.all([
+    db.magazine.findMany({
+      where: { branches: { some: { branchId } } },
+      select: { language: true },
+      distinct: ['language'],
+      orderBy: { language: 'asc' },
+    }),
+    db.magazine.findMany({
+      where: { branches: { some: { branchId } } },
+      select: { cadence: true },
+      distinct: ['cadence'],
+    }),
+  ])
+  const languages = distinctLanguages.map((m) => m.language)
+  const cadences = distinctCadences.map((m) => m.cadence) as CadenceType[]
+
   // Total unfiltered count for display
-  const unfilteredCount = search
+  const hasAnyFilter = !!(search || cadenceFilter || languageFilter || statusFilter)
+  const unfilteredCount = hasAnyFilter
     ? await db.branchMagazine.count({ where: { branchId } })
     : totalCount
 
-  /** Build URL preserving current params */
+  /** Build URL preserving current params (search + filters) */
   function pageUrl(p: number): string {
     const u = new URLSearchParams()
     if (search) u.set('search', search)
+    if (cadenceFilter) u.set('cadence', cadenceFilter)
+    if (languageFilter) u.set('language', languageFilter)
+    if (statusFilter) u.set('status', statusFilter)
     if (p > 1) u.set('page', String(p))
     const qs = u.toString()
     return `/admin/magazines${qs ? `?${qs}` : ''}`
@@ -134,8 +211,13 @@ export default async function AdminMagazinesPage({ searchParams }: PageProps) {
       </div>
 
       {/* Search bar */}
-      <div className="mb-6">
+      <div className="mb-4">
         <MagazineSearch magazines={allMagazineNames} currentSearch={search} />
+      </div>
+
+      {/* Filters */}
+      <div className="mb-6">
+        <MagazineFilters languages={languages} cadences={cadences} />
       </div>
 
       <AdminMagazinesClient
