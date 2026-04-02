@@ -37,10 +37,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 function fmt(date: Date | string | null, includeTime = false): string {
   if (!date) return '—'
-  const d = typeof date === 'string' ? parseISO(date) : date
-  return includeTime
-    ? format(d, 'MMM d, yyyy · h:mm a')
-    : format(d, 'MMM d, yyyy')
+  const iso = typeof date === 'string' ? date : date.toISOString()
+  if (includeTime) {
+    return format(parseISO(iso), 'MMM d, yyyy · h:mm a')
+  }
+  // For date-only display, parse just the YYYY-MM-DD portion to avoid timezone shift
+  const dateOnly = iso.split('T')[0]
+  return format(parseISO(dateOnly), 'MMM d, yyyy')
 }
 
 export default async function MagazineDetailPage({ params, searchParams }: PageProps) {
