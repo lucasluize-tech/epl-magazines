@@ -182,6 +182,7 @@ export default function ReportsClient({
       params.set('from', format(filters.from, 'yyyy-MM-dd'))
       params.set('to', format(filters.to, 'yyyy-MM-dd'))
     }
+    if (filters.periodId) params.set('periodId', filters.periodId)
     return `/admin/reports/export?${params.toString()}`
   }
 
@@ -651,21 +652,39 @@ function TransfersSection({ data }: { data: { rows: TransferReportRow[]; totalCo
   )
 }
 
-/** Renders the subscription overview table. */
+/** Renders the subscription overview table. Shows received/expected column in period mode. */
 function SubscriptionsTable({ rows }: { rows: SubscriptionReportRow[] | null }) {
   if (!rows || rows.length === 0) {
     return <EmptyState message="No subscriptions found" />
   }
+
+  // Detect period mode: any row has issuesPerYear set
+  const isPeriodMode = rows.some((r) => r.issuesPerYear !== undefined)
+  const headers = isPeriodMode
+    ? ['Branch', 'Magazine', 'Language', 'Cadence', 'Qty', 'Received / Expected', 'Status']
+    : ['Branch', 'Magazine', 'Language', 'Cadence', 'Qty', 'Status']
 
   return (
     <div
       className="rounded-lg border overflow-hidden"
       style={{ borderColor: 'oklch(0.876 0.016 88)', backgroundColor: 'oklch(0.978 0.009 88)' }}
     >
+      {isPeriodMode && rows[0]?.periodName && (
+        <div
+          className="px-4 py-2 text-xs font-medium border-b"
+          style={{
+            backgroundColor: 'oklch(0.963 0.012 91)',
+            borderColor: 'oklch(0.876 0.016 88)',
+            color: 'oklch(0.45 0.035 72)',
+          }}
+        >
+          Period: {rows[0].periodName}
+        </div>
+      )}
       <Table>
         <TableHeader>
           <TableRow style={{ borderColor: 'oklch(0.876 0.016 88)', backgroundColor: 'oklch(0.963 0.012 91)' }}>
-            {['Branch', 'Magazine', 'Language', 'Cadence', 'Qty', 'Status'].map((h) => (
+            {headers.map((h) => (
               <TableHead key={h} className="font-semibold" style={{ color: 'oklch(0.30 0.028 62)' }}>
                 {h}
               </TableHead>
@@ -711,6 +730,16 @@ function SubscriptionsTable({ rows }: { rows: SubscriptionReportRow[] | null }) 
                     {row.quantity}
                   </span>
                 </TableCell>
+                {isPeriodMode && (
+                  <TableCell>
+                    <span className="text-sm font-semibold" style={{ color: 'oklch(0.20 0.028 62)' }}>
+                      {row.receivedCount ?? 0}
+                    </span>
+                    <span className="text-xs" style={{ color: 'oklch(0.55 0.030 72)' }}>
+                      {' '}/ {row.issuesPerYear ?? '?'}
+                    </span>
+                  </TableCell>
+                )}
                 <TableCell>
                   <Badge
                     variant="outline"

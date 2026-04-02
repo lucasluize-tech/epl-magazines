@@ -345,6 +345,12 @@ export interface SubscriptionReportRow {
   cadence: CadenceType
   quantity: number
   active: boolean
+  /** Issues per year from MagazineSubscription; only present in period-scoped mode */
+  issuesPerYear?: number
+  /** Number of receipts recorded within the period; only present in period-scoped mode */
+  receivedCount?: number
+  /** Name of the subscription period; only present in period-scoped mode */
+  periodName?: string
 }
 
 /** Data point for the Receipt Timeline chart */

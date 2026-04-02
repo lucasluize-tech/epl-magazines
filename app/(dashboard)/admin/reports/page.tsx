@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { getUser } from '@/lib/dal'
 import { getActiveBranches } from '@/lib/branch'
+import { resolveActivePeriodId } from '@/lib/period'
 import {
   parseReportFilters,
   getReceiptSummary,
@@ -31,7 +32,18 @@ export default async function AdminReportsPage({ searchParams }: PageProps) {
   if (user.role !== 'ADMIN') redirect('/dashboard')
 
   const params = await searchParams
-  const filters = parseReportFilters(params)
+
+  // Resolve the active subscription period and inject it into filters
+  // so all report queries default to the period's date range.
+  let activePeriodId: string | undefined
+  try {
+    activePeriodId = await resolveActivePeriodId()
+  } catch {
+    // No periods exist yet — fall back to date-preset-only mode
+    activePeriodId = undefined
+  }
+
+  const filters = parseReportFilters({ ...params, periodId: activePeriodId })
   const branches = await getActiveBranches()
   const languages = await getAvailableLanguages()
 
