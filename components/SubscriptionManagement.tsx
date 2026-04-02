@@ -177,7 +177,7 @@ export default function SubscriptionManagement({
           <Table>
             <TableHeader>
               <TableRow style={{ borderColor: 'oklch(0.876 0.016 88)', backgroundColor: 'oklch(0.963 0.012 91)' }}>
-                {['Magazine', 'Language', 'Cadence', 'At Branches', 'Issues/Year', 'Status', 'Actions'].map((h) => (
+                {['Magazine', 'Language', 'Cadence', 'At Branches', 'Issues/Year', 'Actions'].map((h) => (
                   <TableHead
                     key={h}
                     className={`font-semibold ${h === 'Actions' ? 'text-right' : ''}`}
@@ -235,19 +235,6 @@ export default function SubscriptionManagement({
                         <Pencil size={12} style={{ color: 'oklch(0.50 0.035 72)' }} />
                       </Button>
                     </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="outline"
-                      className="text-xs font-medium"
-                      style={
-                        sub.active
-                          ? { backgroundColor: 'oklch(0.92 0.050 155)', color: 'oklch(0.38 0.082 156)', border: 'none' }
-                          : { backgroundColor: 'oklch(0.93 0.010 88)', color: 'oklch(0.50 0.020 62)', border: 'none' }
-                      }
-                    >
-                      {sub.active ? 'Active' : 'Inactive'}
-                    </Badge>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center justify-end">
