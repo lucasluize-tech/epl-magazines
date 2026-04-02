@@ -230,7 +230,7 @@ export default function ReportsClient({
           <button
             key={opt.value}
             onClick={() => router.push(buildUrl({ period: opt.value }))}
-            className="px-3 py-1.5 rounded-full text-xs font-medium transition-all border"
+            className="px-3 py-1.5 rounded-full text-xs font-medium transition-all border cursor-pointer"
             style={{
               backgroundColor: filters.period === opt.value
                 ? 'oklch(0.38 0.082 156)'
@@ -254,7 +254,7 @@ export default function ReportsClient({
           <label className="text-sm" style={{ color: 'oklch(0.45 0.035 72)' }}>From</label>
           <Input
             type="date"
-            className="w-40"
+            className="w-40 cursor-pointer"
             value={filters.from.toISOString().split('T')[0]}
             onChange={(e) => {
               if (e.target.value) {
@@ -265,7 +265,7 @@ export default function ReportsClient({
           <label className="text-sm" style={{ color: 'oklch(0.45 0.035 72)' }}>To</label>
           <Input
             type="date"
-            className="w-40"
+            className="w-40 cursor-pointer"
             value={filters.to.toISOString().split('T')[0]}
             onChange={(e) => {
               if (e.target.value) {
@@ -283,7 +283,7 @@ export default function ReportsClient({
             value={filters.periodId ?? ''}
             onValueChange={(v) => router.push(buildUrl({ periodId: v ?? '' }))}
           >
-            <SelectTrigger>
+            <SelectTrigger className="cursor-pointer">
               <SelectValue>
                 {filters.periodId
                   ? periods.find((p) => p.id === filters.periodId)?.name ?? 'All Periods'
@@ -302,7 +302,7 @@ export default function ReportsClient({
           value={filters.branch}
           onValueChange={(v) => router.push(buildUrl({ branch: v ?? 'all' }))}
         >
-          <SelectTrigger>
+          <SelectTrigger className="cursor-pointer">
             <SelectValue>
               {filters.branch === 'all'
                 ? 'All Branches'
@@ -321,7 +321,7 @@ export default function ReportsClient({
           value={filters.language}
           onValueChange={(v) => router.push(buildUrl({ language: v ?? 'all' }))}
         >
-          <SelectTrigger>
+          <SelectTrigger className="cursor-pointer">
             <SelectValue>
               {filters.language === 'all' ? 'All Languages' : filters.language}
             </SelectValue>
@@ -341,7 +341,7 @@ export default function ReportsClient({
           <button
             key={opt.value}
             onClick={() => router.push(buildUrl({ tab: opt.value }))}
-            className="px-4 py-2 text-sm font-medium transition-colors relative"
+            className="px-4 py-2 text-sm font-medium transition-colors relative cursor-pointer"
             style={{
               color: filters.tab === opt.value
                 ? 'oklch(0.38 0.082 156)'
