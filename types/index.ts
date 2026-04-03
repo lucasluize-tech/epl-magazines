@@ -310,6 +310,7 @@ export interface ReportFilters {
   branch: string
   language: string
   periodId?: string
+  magazineId?: string
 }
 
 /** Row in the Receipt Summary report table */

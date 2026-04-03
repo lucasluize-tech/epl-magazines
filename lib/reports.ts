@@ -136,8 +136,9 @@ export function parseReportFilters(
   const { from, to } = resolveDateRange(period, customFrom, customTo)
 
   const periodId = typeof params['periodId'] === 'string' ? params['periodId'] : undefined
+  const magazineId = typeof params['magazineId'] === 'string' ? params['magazineId'] : undefined
 
-  return { tab, period, from, to, branch, language, periodId }
+  return { tab, period, from, to, branch, language, periodId, magazineId }
 }
 
 // ---------------------------------------------------------------------------
@@ -171,6 +172,10 @@ export async function getReceiptSummary(
 
   if (filters.language !== 'all') {
     where['magazine'] = { language: filters.language }
+  }
+
+  if (filters.magazineId) {
+    where['magazineId'] = filters.magazineId
   }
 
   const receipts = await db.issueReceipt.findMany({
@@ -272,6 +277,10 @@ export async function getOverdueReport(filters: ReportFilters): Promise<{
     subWhere['magazine'] = { active: true, language: filters.language }
   }
 
+  if (filters.magazineId) {
+    subWhere['magazineId'] = filters.magazineId
+  }
+
   const subscriptions = await db.branchMagazine.findMany({
     where: subWhere as Prisma.BranchMagazineWhereInput,
     include: {
@@ -370,6 +379,10 @@ async function getOverdueReportForPeriod(
   }
   if (filters.language !== 'all') {
     periodSubWhere['magazine'] = { active: true, language: filters.language }
+  }
+
+  if (filters.magazineId) {
+    periodSubWhere['magazineId'] = filters.magazineId
   }
 
   const periodSubs = await db.magazineSubscription.findMany({
@@ -502,6 +515,10 @@ export async function getTransferReport(filters: ReportFilters): Promise<{
     where['magazine'] = { language: filters.language }
   }
 
+  if (filters.magazineId) {
+    where['magazineId'] = filters.magazineId
+  }
+
   const transfers = await db.transfer.findMany({
     where: where as Prisma.TransferWhereInput,
     include: {
@@ -580,6 +597,10 @@ export async function getSubscriptionOverview(
     where['magazine'] = { language: filters.language }
   }
 
+  if (filters.magazineId) {
+    where['magazineId'] = filters.magazineId
+  }
+
   const subscriptions = await db.branchMagazine.findMany({
     where: where as Prisma.BranchMagazineWhereInput,
     include: {
@@ -628,6 +649,10 @@ async function getSubscriptionOverviewForPeriod(
   }
   if (filters.language !== 'all') {
     msWhere['magazine'] = { active: true, language: filters.language }
+  }
+
+  if (filters.magazineId) {
+    msWhere['magazineId'] = filters.magazineId
   }
 
   const magazineSubs = await db.magazineSubscription.findMany({
@@ -738,6 +763,10 @@ export async function getReceiptTimeline(filters: ReportFilters): Promise<{
 
   if (filters.language !== 'all') {
     where['magazine'] = { language: filters.language }
+  }
+
+  if (filters.magazineId) {
+    where['magazineId'] = filters.magazineId
   }
 
   const receipts = await db.issueReceipt.findMany({

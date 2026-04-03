@@ -3,8 +3,7 @@ import { redirect } from 'next/navigation'
 import { getUser } from '@/lib/dal'
 import { getActiveBranches } from '@/lib/branch'
 import { getSubscriptionPeriods } from '@/lib/period'
-
-// TODO: Task 12 adds per-page period filter
+import db from '@/lib/db'
 import {
   parseReportFilters,
   getReceiptSummary,
@@ -49,6 +48,11 @@ export default async function AdminReportsPage({ searchParams }: PageProps) {
   const filters = parseReportFilters({ ...params, periodId: selectedPeriodId })
   const branches = await getActiveBranches()
   const languages = await getAvailableLanguages()
+  const magazines = await db.magazine.findMany({
+    where: { active: true },
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' },
+  })
 
   // Fetch only the active tab's data
   let receiptSummary = null
@@ -82,6 +86,7 @@ export default async function AdminReportsPage({ searchParams }: PageProps) {
         branches={branches}
         languages={languages}
         periods={periods}
+        magazines={magazines}
         receiptSummary={receiptSummary}
         overdueReport={overdueReport}
         transferReport={transferReport}

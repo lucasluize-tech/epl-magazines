@@ -43,6 +43,8 @@ export interface ReportsClientProps {
   branches: Branch[]
   /** Subscription periods for the period filter dropdown. */
   periods: SubscriptionPeriod[]
+  /** Active magazines for the magazine name filter dropdown. */
+  magazines: { id: string; name: string }[]
   /** Available magazine languages for the language filter dropdown. */
   languages: string[]
   /** Receipt summary rows (only populated when tab === 'receipts'). */
@@ -139,6 +141,7 @@ export default function ReportsClient({
   filters,
   branches,
   periods,
+  magazines,
   languages,
   receiptSummary,
   overdueReport,
@@ -161,6 +164,7 @@ export default function ReportsClient({
       branch: filters.branch,
       language: filters.language,
       ...(filters.periodId ? { periodId: filters.periodId } : {}),
+      ...(filters.magazineId ? { magazineId: filters.magazineId } : {}),
       ...(filters.period === 'custom' ? {
         from: filters.from.toISOString().split('T')[0],
         to: filters.to.toISOString().split('T')[0],
@@ -188,6 +192,7 @@ export default function ReportsClient({
       params.set('to', format(filters.to, 'yyyy-MM-dd'))
     }
     if (filters.periodId) params.set('periodId', filters.periodId)
+    if (filters.magazineId) params.set('magazineId', filters.magazineId)
     return `/admin/reports/export?${params.toString()}`
   }
 
@@ -330,6 +335,25 @@ export default function ReportsClient({
             <SelectItem value="all">All Languages</SelectItem>
             {languages.map((lang) => (
               <SelectItem key={lang} value={lang}>{lang}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={filters.magazineId ?? 'all'}
+          onValueChange={(v) => router.push(buildUrl({ magazineId: v === 'all' ? '' : (v ?? '') }))}
+        >
+          <SelectTrigger className="cursor-pointer">
+            <SelectValue>
+              {filters.magazineId
+                ? magazines.find((m) => m.id === filters.magazineId)?.name ?? 'All Magazines'
+                : 'All Magazines'}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Magazines</SelectItem>
+            {magazines.map((m) => (
+              <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
             ))}
           </SelectContent>
         </Select>
