@@ -350,26 +350,54 @@ async function main() {
     BI_MONTHLY: 6, SEASONAL: 4, YEARLY: 1,
   }
 
-  // Create 2025-2026 subscription period
-  const period = await db.subscriptionPeriod.create({
+  // Create subscription periods
+  const ebscoPeriod = await db.subscriptionPeriod.create({
     data: {
-      name: '2025-2026',
+      name: 'Ebsco-25/26',
       startDate: new Date('2025-06-01T12:00:00Z'),
       endDate: new Date('2026-05-31T12:00:00Z'),
       active: true,
     },
   })
-  console.log('✓ Subscription period 2025-2026 created')
 
-  // Create MagazineSubscriptions
+  const wtcoxPeriod = await db.subscriptionPeriod.create({
+    data: {
+      name: 'Wtcox-25',
+      startDate: new Date('2025-01-01T12:00:00Z'),
+      endDate: new Date('2025-12-31T12:00:00Z'),
+      active: true,
+    },
+  })
+  console.log('✓ Subscription periods Ebsco-25/26 and Wtcox-25 created')
+
+  // Magazines supplied through Wtcox (standing orders / calendar-year subscriptions)
+  // These are non-EBSCO: Ananda Vikatan plus all non-English Indian periodicals
+  const WTCOX_MAGAZINES = new Set([
+    'Ananda Vikatan',
+    'Champak (Gujarati Edition)',
+    'Champak (Hindi Edition)',
+    'Champak (Tamil Edition)',
+    'Champak (Telugu Edition)',
+    'Chitralekha (Gujarati)',
+    'GrihShobha (Gujarati)',
+    'GrihShobha (Hindi)(IND)',
+    'GrihShobha (Tamil)',
+    'GrihShobha (Telugu)',
+    'Saras Salil (Hindi Edition)',
+    'Sarita (Hindi)',
+    'Swati Saparivara Patrika (Telugu)',
+  ])
+
+  // Create MagazineSubscriptions — assign to correct period
   let magazineSubscriptionCount = 0
   for (const mag of await db.magazine.findMany({ select: { id: true, name: true, cadence: true } })) {
     const issuesPerYear = EBSCO_ISSUES[mag.name] ?? CADENCE_FALLBACK[mag.cadence]
     if (issuesPerYear) {
+      const periodId = WTCOX_MAGAZINES.has(mag.name) ? wtcoxPeriod.id : ebscoPeriod.id
       await db.magazineSubscription.create({
         data: {
           magazineId: mag.id,
-          periodId: period.id,
+          periodId,
           issuesPerYear,
         },
       })
