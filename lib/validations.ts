@@ -122,6 +122,7 @@ export const createSubscriptionPeriodSchema = z.object({
   name: z.string().min(1, 'Name required').max(50),
   startDate: dateStringSchema,
   endDate: dateStringSchema,
+  copyFromPeriodId: z.string().optional(),
 })
 
 /** PUT /api/subscription-periods/[id] — update period */

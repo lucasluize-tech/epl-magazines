@@ -29,8 +29,9 @@ export async function GET(): Promise<Response> {
 /**
  * POST /api/subscription-periods
  * Creates a new subscription period. ADMIN only.
- * Deactivates the previous active period, creates the new one as active,
- * and bulk-copies active subscriptions from the previous period.
+ * Creates the period as inactive (active: false).
+ * If copyFromPeriodId is provided, bulk-copies all MagazineSubscription records
+ * from the source period into the new period (all copied as active: false).
  */
 export async function POST(request: NextRequest): Promise<Response> {
   const session = await verifySessionForApi()
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     if (!parsed.success) {
       return Response.json({ error: parsed.error.issues[0].message }, { status: 400 })
     }
-    const { name, startDate: startDateStr, endDate: endDateStr } = parsed.data
+    const { name, startDate: startDateStr, endDate: endDateStr, copyFromPeriodId } = parsed.data
 
     // Normalize dates to noon UTC
     const startDate = new Date(startDateStr + 'T12:00:00Z')
@@ -52,61 +53,44 @@ export async function POST(request: NextRequest): Promise<Response> {
       return Response.json({ error: 'End date must be after start date' }, { status: 400 })
     }
 
-    // Check for overlapping periods
-    const overlap = await db.subscriptionPeriod.findFirst({
-      where: {
-        AND: [
-          { startDate: { lt: endDate } },
-          { endDate: { gt: startDate } },
-        ],
-      },
-    })
-    if (overlap) {
-      return Response.json({ error: `Dates overlap with existing period "${overlap.name}"` }, { status: 409 })
-    }
-
     const result = await withRetry(() => db.$transaction(async (tx) => {
-      // Fetch current active period before deactivating
-      const previousPeriod = await tx.subscriptionPeriod.findFirst({
-        where: { active: true },
-        select: { id: true, name: true },
-      })
-
-      // Deactivate current active period
-      if (previousPeriod) {
-        await tx.subscriptionPeriod.updateMany({
-          where: { active: true },
-          data: { active: false },
-        })
-      }
-
-      // Create the new period
+      // Create the new period as inactive
       const newPeriod = await tx.subscriptionPeriod.create({
-        data: { name: name.trim(), startDate, endDate, active: true },
+        data: { name: name.trim(), startDate, endDate, active: false },
       })
 
-      // Bulk-copy subscriptions from previous period
+      // Bulk-copy subscriptions from source period if requested
       let copiedCount = 0
-      if (previousPeriod) {
-        const previousSubs = await tx.magazineSubscription.findMany({
-          where: { periodId: previousPeriod.id, active: true },
-          select: { magazineId: true, issuesPerYear: true },
+      let sourcePeriodName: string | null = null
+
+      if (copyFromPeriodId) {
+        const sourcePeriod = await tx.subscriptionPeriod.findUnique({
+          where: { id: copyFromPeriodId },
+          select: { id: true, name: true },
         })
 
-        if (previousSubs.length > 0) {
-          await tx.magazineSubscription.createMany({
-            data: previousSubs.map((sub) => ({
-              magazineId: sub.magazineId,
-              periodId: newPeriod.id,
-              issuesPerYear: sub.issuesPerYear,
-              active: true,
-            })),
+        if (sourcePeriod) {
+          sourcePeriodName = sourcePeriod.name
+          const sourceSubs = await tx.magazineSubscription.findMany({
+            where: { periodId: sourcePeriod.id },
+            select: { magazineId: true, issuesPerYear: true },
           })
-          copiedCount = previousSubs.length
+
+          if (sourceSubs.length > 0) {
+            await tx.magazineSubscription.createMany({
+              data: sourceSubs.map((sub) => ({
+                magazineId: sub.magazineId,
+                periodId: newPeriod.id,
+                issuesPerYear: sub.issuesPerYear,
+                active: false,
+              })),
+            })
+            copiedCount = sourceSubs.length
+          }
         }
       }
 
-      return { period: newPeriod, copiedCount, previousPeriodName: previousPeriod?.name ?? null }
+      return { period: newPeriod, copiedCount, sourcePeriodName }
     }))
 
     auditLog(session.userId, 'PERIOD_CREATED', {
@@ -117,7 +101,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     if (result.copiedCount > 0) {
       auditLog(session.userId, 'SUBSCRIPTIONS_BULK_COPIED', {
-        fromPeriod: result.previousPeriodName,
+        fromPeriod: result.sourcePeriodName,
         toPeriod: result.period.name,
         count: result.copiedCount,
       })
