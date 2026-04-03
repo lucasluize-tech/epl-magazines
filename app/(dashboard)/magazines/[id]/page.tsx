@@ -3,9 +3,6 @@ import { notFound } from 'next/navigation'
 import { verifySession } from '@/lib/dal'
 import db from '@/lib/db'
 import { computeNextExpectedDate, getSubscriptionAwareStatus, CADENCE_LABELS } from '@/lib/cadence'
-import { getActivePeriods } from '@/lib/period'
-
-// TODO: Task 11 rewrites this for per-magazine period
 import { format, parseISO } from 'date-fns'
 import Link from 'next/link'
 import MagazineStatusBadge from '@/components/MagazineStatusBadge'
@@ -51,13 +48,10 @@ function fmt(date: Date | string | null, includeTime = false): string {
 export default async function MagazineDetailPage({ params, searchParams }: PageProps) {
   const session = await verifySession()
   const [{ id }, resolvedSearchParams] = await Promise.all([params, searchParams])
-  const [activeBranchId, activePeriods, branches] = await Promise.all([
+  const [activeBranchId, branches] = await Promise.all([
     resolveActiveBranchId(),
-    getActivePeriods(),
     getActiveBranches(),
   ])
-  // Use first active period as fallback until Task 11 rewrites
-  const activePeriod = activePeriods[0] ?? null
   const isAdmin = session.role === 'ADMIN'
 
   const magazine = await db.magazine.findUnique({
@@ -78,18 +72,25 @@ export default async function MagazineDetailPage({ params, searchParams }: PageP
 
   const page = Math.max(1, parseInt(resolvedSearchParams.page ?? '1', 10) || 1)
 
+  // Find this magazine's active subscription (if any)
+  const activeSub = await db.magazineSubscription.findFirst({
+    where: {
+      magazineId: id,
+      active: true,
+      period: { active: true },
+    },
+    include: { period: true },
+  })
+
+  // Use the subscription's period for date scoping (or null if unsubscribed)
+  const activePeriod = activeSub ? activeSub.period : null
+
   const periodDateFilter = activePeriod
     ? { gte: new Date(activePeriod.startDate), lte: new Date(activePeriod.endDate) }
     : { gte: new Date('2000-01-01'), lte: new Date('2099-12-31') }
 
-  // Fetch subscription, pending transfer, period receipt count, last receipt, paginated receipts, total count — in parallel
-  const [subscription, pendingTransfer, periodReceiptCount, lastReceipt, receipts, totalReceipts] = await Promise.all([
-    activePeriod
-      ? db.magazineSubscription.findUnique({
-          where: { magazineId_periodId: { magazineId: id, periodId: activePeriod.id } },
-          select: { issuesPerYear: true, active: true },
-        })
-      : Promise.resolve(null),
+  // Fetch pending transfer, period receipt count, last receipt, paginated receipts, total count — in parallel
+  const [pendingTransfer, periodReceiptCount, lastReceipt, receipts, totalReceipts] = await Promise.all([
     db.transfer.findFirst({
       where: {
         magazineId: id,
@@ -142,7 +143,7 @@ export default async function MagazineDetailPage({ params, searchParams }: PageP
 
   const lastReceivedDate = lastReceipt?.receivedDate ?? null
   const nextExpectedDate = computeNextExpectedDate(lastReceivedDate, magazine.cadence)
-  const issuesPerYear = subscription?.active ? subscription.issuesPerYear : null
+  const issuesPerYear = activeSub?.active ? activeSub.issuesPerYear : null
   const periodStartDate = activePeriod?.startDate ?? new Date().toISOString()
   const status = getSubscriptionAwareStatus(
     lastReceivedDate,
@@ -214,19 +215,32 @@ export default async function MagazineDetailPage({ params, searchParams }: PageP
                 {magazine.notes}
               </p>
             )}
+
+            {/* Subscription period badge */}
+            <div className="mt-3">
+              {activePeriod ? (
+                <Badge variant="outline" className="text-xs">
+                  {activePeriod.name}
+                </Badge>
+              ) : (
+                <span className="text-muted-foreground text-sm">Not currently subscribed</span>
+              )}
+            </div>
           </div>
 
-          <MagazineDetailActions
-            magazine={{ id: magazine.id, name: magazine.name }}
-            activeBranchId={activeBranchId}
-            pendingTransfer={pendingTransfer ? {
-              id: pendingTransfer.id,
-              quantity: pendingTransfer.quantity,
-              fromBranchName: pendingTransfer.fromBranch.name,
-            } : null}
-            receivedCount={periodReceiptCount}
-            issuesPerYear={issuesPerYear}
-          />
+          {activePeriod && (
+            <MagazineDetailActions
+              magazine={{ id: magazine.id, name: magazine.name }}
+              activeBranchId={activeBranchId}
+              pendingTransfer={pendingTransfer ? {
+                id: pendingTransfer.id,
+                quantity: pendingTransfer.quantity,
+                fromBranchName: pendingTransfer.fromBranch.name,
+              } : null}
+              receivedCount={periodReceiptCount}
+              issuesPerYear={issuesPerYear}
+            />
+          )}
         </div>
 
         {/* Stats row */}
@@ -236,10 +250,10 @@ export default async function MagazineDetailPage({ params, searchParams }: PageP
               Issues at Branch
             </p>
             <p className="text-2xl font-bold" style={{ fontFamily: 'var(--font-playfair)', color: 'oklch(0.15 0.028 62)' }}>
-              {periodReceiptCount}
-              {subscription?.active && (
+              {activePeriod ? periodReceiptCount : '—'}
+              {activeSub?.active && (
                 <span className="text-base font-normal" style={{ color: 'oklch(0.55 0.030 72)' }}>
-                  /{subscription.issuesPerYear}
+                  /{activeSub.issuesPerYear}
                 </span>
               )}
             </p>
@@ -271,7 +285,13 @@ export default async function MagazineDetailPage({ params, searchParams }: PageP
         Receipt History
       </h2>
 
-      {totalReceipts === 0 ? (
+      {!activePeriod ? (
+        <div className="text-center py-16" style={{ color: 'oklch(0.60 0.025 72)' }}>
+          <BookOpen size={36} className="mx-auto mb-3 opacity-30" />
+          <p className="font-medium" style={{ fontFamily: 'var(--font-playfair)' }}>No active subscription</p>
+          <p className="text-sm mt-1">Use Reports for historical receipt data.</p>
+        </div>
+      ) : totalReceipts === 0 ? (
         <div className="text-center py-16" style={{ color: 'oklch(0.60 0.025 72)' }}>
           <BookOpen size={36} className="mx-auto mb-3 opacity-30" />
           <p className="font-medium" style={{ fontFamily: 'var(--font-playfair)' }}>No receipts on record</p>
