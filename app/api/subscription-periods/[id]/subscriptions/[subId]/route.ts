@@ -31,11 +31,30 @@ export async function PUT(
     const existing = await db.magazineSubscription.findUnique({
       where: { id: subId, periodId: id },
       include: {
-        magazine: { select: { name: true } },
+        magazine: { select: { id: true, name: true } },
         period: { select: { name: true } },
       },
     })
     if (!existing) return Response.json({ error: 'Subscription not found' }, { status: 404 })
+
+    // If activating, check for conflicts with other active periods
+    if (parsed.data.active === true && !existing.active) {
+      const conflict = await db.magazineSubscription.findFirst({
+        where: {
+          magazineId: existing.magazine.id,
+          active: true,
+          period: { active: true },
+          NOT: { periodId: id },
+        },
+        include: { period: { select: { name: true } } },
+      })
+      if (conflict) {
+        return Response.json(
+          { error: `Magazine is already active in period "${conflict.period.name}"` },
+          { status: 409 },
+        )
+      }
+    }
 
     const data: Record<string, unknown> = {}
     if (parsed.data.issuesPerYear !== undefined) data.issuesPerYear = parsed.data.issuesPerYear

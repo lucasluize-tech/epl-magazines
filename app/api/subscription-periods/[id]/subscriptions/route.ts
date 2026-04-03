@@ -68,7 +68,7 @@ export async function POST(
 
     // Verify period and magazine exist
     const [period, magazine] = await Promise.all([
-      db.subscriptionPeriod.findUnique({ where: { id }, select: { id: true, name: true } }),
+      db.subscriptionPeriod.findUnique({ where: { id }, select: { id: true, name: true, active: true } }),
       db.magazine.findUnique({ where: { id: magazineId }, select: { id: true, name: true } }),
     ])
     if (!period) return Response.json({ error: 'Period not found' }, { status: 404 })
@@ -82,8 +82,27 @@ export async function POST(
       return Response.json({ error: `${magazine.name} is already subscribed in this period` }, { status: 409 })
     }
 
+    // If the period is active, check for conflicts with other active periods
+    if (period.active) {
+      const conflict = await db.magazineSubscription.findFirst({
+        where: {
+          magazineId,
+          active: true,
+          period: { active: true },
+          NOT: { periodId: id },
+        },
+        include: { period: { select: { name: true } } },
+      })
+      if (conflict) {
+        return Response.json(
+          { error: `Magazine is already active in period "${conflict.period.name}"` },
+          { status: 409 },
+        )
+      }
+    }
+
     const subscription = await withRetry(() => db.magazineSubscription.create({
-      data: { magazineId, periodId: id, issuesPerYear, active: true },
+      data: { magazineId, periodId: id, issuesPerYear, active: period.active },
       include: {
         magazine: { select: { id: true, name: true, cadence: true, language: true, active: true } },
       },
