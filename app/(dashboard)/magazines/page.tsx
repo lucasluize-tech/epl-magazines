@@ -3,8 +3,10 @@ import type { MagazineWithStatus } from '@/types'
 import { verifySession } from '@/lib/dal'
 import db from '@/lib/db'
 import { resolveActiveBranchId, getActiveBranches } from '@/lib/branch'
-import { resolveActivePeriod } from '@/lib/period'
+import { getActivePeriods } from '@/lib/period'
 import { computeNextExpectedDate, getSubscriptionAwareStatus, CADENCE_LABELS } from '@/lib/cadence'
+
+// TODO: Task 8 rewrites this for multi-period
 import { format } from 'date-fns'
 import Link from 'next/link'
 import MagazineStatusBadge from '@/components/MagazineStatusBadge'
@@ -42,10 +44,12 @@ export default async function MagazinesPage({ searchParams }: PageProps) {
   const search = typeof params?.search === 'string' ? params.search.trim() : ''
   const page = Math.max(1, parseInt(typeof params?.page === 'string' ? params.page : '1', 10) || 1)
 
-  const [activeBranchId, activePeriod] = await Promise.all([
+  const [activeBranchId, activePeriods] = await Promise.all([
     resolveActiveBranchId(),
-    resolveActivePeriod(),
+    getActivePeriods(),
   ])
+  // Use first active period as fallback until multi-period rewrite
+  const activePeriod = activePeriods[0] ?? null
   const branches = await getActiveBranches()
   const currentBranch = branches.find((b) => b.id === activeBranchId)
 
@@ -80,44 +84,47 @@ export default async function MagazinesPage({ searchParams }: PageProps) {
 
   type MagazineRow = MagazineWithStatus & { _count: { receipts: number } }
 
-  const periodStart = new Date(activePeriod.startDate)
-  const periodEnd = new Date(activePeriod.endDate)
-
   const processed: MagazineRow[] = []
-  for (const mag of magazines) {
-    const lastReceipt = mag.receipts[0] ?? null
-    const lastReceivedDate = lastReceipt?.receivedDate ?? null
 
-    // Fetch subscription for this magazine in the active period
-    const subscription = await db.magazineSubscription.findUnique({
-      where: { magazineId_periodId: { magazineId: mag.id, periodId: activePeriod.id } },
-      select: { issuesPerYear: true, active: true },
-    })
-    const issuesPerYear = subscription?.active ? subscription.issuesPerYear : null
+  if (activePeriod) {
+    const periodStart = new Date(activePeriod.startDate)
+    const periodEnd = new Date(activePeriod.endDate)
 
-    // Count receipts within the period's date range
-    const periodReceipts = await db.issueReceipt.count({
-      where: {
-        magazineId: mag.id,
-        branchId: activeBranchId,
-        receivedDate: { gte: periodStart, lte: periodEnd },
-      },
-    })
+    for (const mag of magazines) {
+      const lastReceipt = mag.receipts[0] ?? null
+      const lastReceivedDate = lastReceipt?.receivedDate ?? null
 
-    const status = getSubscriptionAwareStatus(
-      lastReceivedDate,
-      mag.cadence,
-      periodReceipts,
-      issuesPerYear,
-      activePeriod.startDate,
-    )
+      // Fetch subscription for this magazine in the active period
+      const subscription = await db.magazineSubscription.findUnique({
+        where: { magazineId_periodId: { magazineId: mag.id, periodId: activePeriod.id } },
+        select: { issuesPerYear: true, active: true },
+      })
+      const issuesPerYear = subscription?.active ? subscription.issuesPerYear : null
 
-    const anchor = lastReceivedDate ?? activePeriod.startDate
-    const nextExpectedDate = status === 'completed' || status === 'not_subscribed'
-      ? null
-      : computeNextExpectedDate(anchor, mag.cadence)
+      // Count receipts within the period's date range
+      const periodReceipts = await db.issueReceipt.count({
+        where: {
+          magazineId: mag.id,
+          branchId: activeBranchId,
+          receivedDate: { gte: periodStart, lte: periodEnd },
+        },
+      })
 
-    processed.push({ ...mag, lastReceivedDate, nextExpectedDate, status, lastReceivedBy: lastReceipt?.receivedBy?.name })
+      const status = getSubscriptionAwareStatus(
+        lastReceivedDate,
+        mag.cadence,
+        periodReceipts,
+        issuesPerYear,
+        activePeriod.startDate,
+      )
+
+      const anchor = lastReceivedDate ?? activePeriod.startDate
+      const nextExpectedDate = status === 'completed' || status === 'not_subscribed'
+        ? null
+        : computeNextExpectedDate(anchor, mag.cadence)
+
+      processed.push({ ...mag, lastReceivedDate, nextExpectedDate, status, lastReceivedBy: lastReceipt?.receivedBy?.name })
+    }
   }
 
   const filtered = filter === 'all' ? processed : processed.filter((m) => m.status === filter)

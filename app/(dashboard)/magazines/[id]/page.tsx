@@ -3,7 +3,9 @@ import { notFound } from 'next/navigation'
 import { verifySession } from '@/lib/dal'
 import db from '@/lib/db'
 import { computeNextExpectedDate, getSubscriptionAwareStatus, CADENCE_LABELS } from '@/lib/cadence'
-import { resolveActivePeriod } from '@/lib/period'
+import { getActivePeriods } from '@/lib/period'
+
+// TODO: Task 11 rewrites this for per-magazine period
 import { format, parseISO } from 'date-fns'
 import Link from 'next/link'
 import MagazineStatusBadge from '@/components/MagazineStatusBadge'
@@ -49,11 +51,13 @@ function fmt(date: Date | string | null, includeTime = false): string {
 export default async function MagazineDetailPage({ params, searchParams }: PageProps) {
   const session = await verifySession()
   const [{ id }, resolvedSearchParams] = await Promise.all([params, searchParams])
-  const [activeBranchId, activePeriod, branches] = await Promise.all([
+  const [activeBranchId, activePeriods, branches] = await Promise.all([
     resolveActiveBranchId(),
-    resolveActivePeriod(),
+    getActivePeriods(),
     getActiveBranches(),
   ])
+  // Use first active period as fallback until Task 11 rewrites
+  const activePeriod = activePeriods[0] ?? null
   const isAdmin = session.role === 'ADMIN'
 
   const magazine = await db.magazine.findUnique({
@@ -74,17 +78,18 @@ export default async function MagazineDetailPage({ params, searchParams }: PageP
 
   const page = Math.max(1, parseInt(resolvedSearchParams.page ?? '1', 10) || 1)
 
-  const periodDateFilter = {
-    gte: new Date(activePeriod.startDate),
-    lte: new Date(activePeriod.endDate),
-  }
+  const periodDateFilter = activePeriod
+    ? { gte: new Date(activePeriod.startDate), lte: new Date(activePeriod.endDate) }
+    : { gte: new Date('2000-01-01'), lte: new Date('2099-12-31') }
 
   // Fetch subscription, pending transfer, period receipt count, last receipt, paginated receipts, total count — in parallel
   const [subscription, pendingTransfer, periodReceiptCount, lastReceipt, receipts, totalReceipts] = await Promise.all([
-    db.magazineSubscription.findUnique({
-      where: { magazineId_periodId: { magazineId: id, periodId: activePeriod.id } },
-      select: { issuesPerYear: true, active: true },
-    }),
+    activePeriod
+      ? db.magazineSubscription.findUnique({
+          where: { magazineId_periodId: { magazineId: id, periodId: activePeriod.id } },
+          select: { issuesPerYear: true, active: true },
+        })
+      : Promise.resolve(null),
     db.transfer.findFirst({
       where: {
         magazineId: id,
@@ -138,12 +143,13 @@ export default async function MagazineDetailPage({ params, searchParams }: PageP
   const lastReceivedDate = lastReceipt?.receivedDate ?? null
   const nextExpectedDate = computeNextExpectedDate(lastReceivedDate, magazine.cadence)
   const issuesPerYear = subscription?.active ? subscription.issuesPerYear : null
+  const periodStartDate = activePeriod?.startDate ?? new Date().toISOString()
   const status = getSubscriptionAwareStatus(
     lastReceivedDate,
     magazine.cadence,
     periodReceiptCount,
     issuesPerYear,
-    activePeriod.startDate,
+    periodStartDate,
   )
 
   const totalPages = Math.max(1, Math.ceil(totalReceipts / PAGE_SIZE))

@@ -32,6 +32,7 @@ NAME_MAP = {
     "ARCHITECTURAL DIGEST": "Architectural Digest",
     "ARTISTS MAGAZINE": "Artists Magazine",
     "ASK": "Ask",
+    "BABY BUG": "Babybug",
     "ASTRONOMY": "Astronomy",
     "ASTRONOMY - PRINT + ONLINE": "Astronomy",
     "ATLANTIC MONTHLY": "Atlantic Monthly",
@@ -105,12 +106,15 @@ NAME_MAP = {
     "HARVARD HEALTH LETTER": "Harvard Health Letter",
     "HARVARD HEALTH LETTER - PRINT + ONLINE": "Harvard Health Letter",
     "HGTV MAGAZINE": "HGTV Magazine",
+    "HIGHLIGHTS": "Highlights for Children",
     "HIGHLIGHTS FOR CHILDREN": "Highlights for Children",
+    "HIGHLIGHTS HIGH 5": "Highlights High Five",
     "HIGHLIGHTS HIGH FIVE": "Highlights High Five",
     "HOCKEY NEWS": "Hockey News",
     "HOCKEY NEWS - CANADA": "Hockey News",
     "HOME & DESIGN MAGAZINE": "Home & Design Magazine",
     "HOUSE BEAUTIFUL": "House Beautiful",
+    "HUMPTY DUMPTY": "Humpty Dumpty Magazine",
     "HUMPTY DUMPTY MAGAZINE": "Humpty Dumpty Magazine",
     "INC": "Inc",
     "INC -": "Inc",
@@ -133,8 +137,10 @@ NAME_MAP = {
     "MUSE": "Muse",
     "NATIONAL GEOGRAPHIC": "National Geographic",
     "NATIONAL GEOGRAPHIC HISTORY": "National Geographic History",
+    "NATIONAL GEO. KIDS": "National Geographic Kids",
     "NATIONAL GEOGRAPHIC - KIDS": "National Geographic Kids",
     "NATIONAL GEOGRAPHIC KIDS": "National Geographic Kids",
+    "NAT GEO LITTLE KIDS": "National Geographic Little Kids",
     "NATIONAL GEOGRAPHIC - LITTLE KIDS": "National Geographic Little Kids",
     "NATIONAL GEOGRAPHIC LITTLE KIDS": "National Geographic Little Kids",
     "NATIONAL GEOGRAPHIC SOCIETY MEMBERSHIP": "National Geographic",
@@ -159,6 +165,7 @@ NAME_MAP = {
     "RANGER RICK - AMERICAN ED": "Ranger Rick",
     "RANGER RICK - AMERICAN EDITION": "Ranger Rick",
     "RANGER RICK JR": "Ranger Rick Jr",
+    "RANGER RICK JR.": "Ranger Rick Jr",
     "READERS DIGEST - LARGE PRINT FOR EASIER READING": "Readers Digest - Large Print",
     "READERS DIGEST - LARGE PRINT": "Readers Digest - Large Print",
     "READERS DIGEST - US ED(1)": "Readers Digest - US Ed",
@@ -176,10 +183,12 @@ NAME_MAP = {
     "SERIES MADE SIMPLE": "Series Made Simple",
     "SMITHSONIAN": "Smithsonian",
     "SPIDER": "Spider",
+    "SPIDER?": "Spider",
     "SPORTS ILLUSTRATED": "Sports Illustrated",
     "SPORTS ILLUSTRATED FOR KIDS": "Sports Illustrated Kids",
     "SPORTS ILLUSTRATED KIDS": "Sports Illustrated Kids",
     "SUPERMAN": "Superman",
+    "SUPERMAN?": "Superman",
     "SWATI SAPARIVARA PATRIKA(TELUGU)": "Swati Saparivara Patrika (Telugu)",
     "SWATI SAPARIVARA PATRIKA": "Swati Saparivara Patrika (Telugu)",
     "TASTE OF HOME": "Taste of Home",
@@ -886,6 +895,129 @@ def read_ne_sheets(filepath: str) -> list[dict]:
     return receipts
 
 
+def read_cb_adult_sheets(filepath: str) -> list[dict]:
+    """Read Clara Barton adult magazine spreadsheet (sheets '2025' and '2026').
+
+    Format is the same as Main: TITLE in column A, month columns B-M (Jan-Dec).
+    """
+    wb = openpyxl.load_workbook(filepath, data_only=True)
+    receipts = []
+
+    sheet_years = {"2025": 2025, "2026": 2026}
+    for sheet_name, year in sheet_years.items():
+        if sheet_name not in wb.sheetnames:
+            print(f"  WARNING: Sheet {repr(sheet_name)} not found in CB adult workbook", file=sys.stderr)
+            continue
+
+        ws = wb[sheet_name]
+        for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
+            raw_name = str(row[0].value).strip() if row[0].value else ''
+            if not raw_name or raw_name == 'None':
+                continue
+
+            canonical = resolve_name(raw_name, "MAIN")
+            if canonical is None:
+                print(f"  WARNING: No mapping for CB adult name: {repr(raw_name)}", file=sys.stderr)
+                continue
+
+            for col_idx in range(1, 13):  # columns B-M = Jan-Dec
+                col_month = col_idx  # 1=Jan, 2=Feb, etc.
+                if col_idx >= len(row):
+                    continue
+                cell_val = row[col_idx].value
+                if cell_val is None:
+                    continue
+
+                dates = parse_cell(cell_val, col_month, year)
+                for d in dates:
+                    receipts.append({
+                        "magazine": canonical,
+                        "branch": "CB",
+                        "date": d,
+                        "notes": str(cell_val).strip()[:80],
+                    })
+
+    return receipts
+
+
+def read_cb_childrens_sheet(filepath: str) -> list[dict]:
+    """Read Clara Barton children's magazine spreadsheet (sheet 'Sheet1').
+
+    Format is the same as Main: TITLE in column A, month columns B-M (Jan-Dec).
+    The sheet covers both 2025 and 2026 data split by a year header row.
+    We detect the active year by looking for a row whose first cell contains just
+    the year (e.g. "2025", "2026") and update context accordingly.
+    If no such row is found, we default to 2025 for columns 1-12 and 2026 for
+    any second pass of month columns (columns 14-25 if present).
+    """
+    wb = openpyxl.load_workbook(filepath, data_only=True)
+    receipts = []
+
+    sheet_name = "Sheet1"
+    if sheet_name not in wb.sheetnames:
+        print(f"  WARNING: Sheet {repr(sheet_name)} not found in CB children's workbook", file=sys.stderr)
+        return receipts
+
+    ws = wb[sheet_name]
+
+    # Detect layout: check header row for year groups
+    # The sheet may have two sets of month columns: Jan-Dec 2025 (cols B-M) then Jan-Dec 2026 (cols N-Y)
+    # OR it may have a single year column set with a year indicator in the name row.
+    # We handle both: first 12 month columns = 2025, next 12 = 2026.
+    for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
+        raw_name = str(row[0].value).strip() if row[0].value else ''
+        if not raw_name or raw_name == 'None':
+            continue
+
+        # Skip header/year indicator rows (cell is just "2025", "2026", or "TITLE" etc.)
+        if re.match(r'^\d{4}$', raw_name) or raw_name.upper() in ('TITLE', 'MAGAZINE', 'NAME'):
+            continue
+
+        canonical = resolve_name(raw_name, "MAIN")
+        if canonical is None:
+            print(f"  WARNING: No mapping for CB children's name: {repr(raw_name)}", file=sys.stderr)
+            continue
+
+        # Process first 12 month columns (2025): col indices 1-12
+        for col_idx in range(1, 13):
+            col_month = col_idx
+            if col_idx >= len(row):
+                continue
+            cell_val = row[col_idx].value
+            if cell_val is None:
+                continue
+
+            dates = parse_cell(cell_val, col_month, 2025)
+            for d in dates:
+                receipts.append({
+                    "magazine": canonical,
+                    "branch": "CB",
+                    "date": d,
+                    "notes": str(cell_val).strip()[:80],
+                })
+
+        # Process second 12 month columns (2026): col indices 13-24 (if present)
+        if ws.max_column >= 14:
+            for col_idx in range(13, 25):
+                col_month = col_idx - 12  # 1=Jan, 2=Feb, etc.
+                if col_idx >= len(row):
+                    continue
+                cell_val = row[col_idx].value
+                if cell_val is None:
+                    continue
+
+                dates = parse_cell(cell_val, col_month, 2026)
+                for d in dates:
+                    receipts.append({
+                        "magazine": canonical,
+                        "branch": "CB",
+                        "date": d,
+                        "notes": str(cell_val).strip()[:80],
+                    })
+
+    return receipts
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -905,7 +1037,15 @@ def main():
     ne = read_ne_sheets(str(base / "Ebsco NE 2025-2026 Magazine List.xlsx"))
     print(f"  -> {len(ne)} receipts")
 
-    all_receipts = main_2025 + main_2026 + ne
+    print("Reading CB adult 2025-2026...")
+    cb_adult = read_cb_adult_sheets(str(base / "Ebsco CB 2025-2026 Magazine List.xlsx"))
+    print(f"  -> {len(cb_adult)} receipts")
+
+    print("Reading CB children's 2025-2026...")
+    cb_childrens = read_cb_childrens_sheet(str(base / "Ebsco CB 2025-2026 Childrens Magazine List.xlsx"))
+    print(f"  -> {len(cb_childrens)} receipts")
+
+    all_receipts = main_2025 + main_2026 + ne + cb_adult + cb_childrens
 
     # Deduplicate: same magazine + branch + date
     seen = set()
@@ -925,9 +1065,9 @@ def main():
             # Likely a typo: fix year to 2025
             r["date"] = "2025" + r["date"][4:]
 
-    # Filter out receipts before the subscription start date (2025-06-01)
+    # Filter out receipts before the subscription start date (2025-01-01)
     from datetime import date as date_type
-    SUBSCRIPTION_START = date_type(2025, 6, 1)
+    SUBSCRIPTION_START = date_type(2025, 1, 1)
     deduped = [r for r in deduped if r['date'] >= SUBSCRIPTION_START.isoformat()]
     print(f"After filtering >= {SUBSCRIPTION_START}: {len(deduped)} receipts")
 

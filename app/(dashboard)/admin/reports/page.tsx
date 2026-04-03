@@ -2,7 +2,9 @@ import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { getUser } from '@/lib/dal'
 import { getActiveBranches } from '@/lib/branch'
-import { resolveActivePeriodId, getSubscriptionPeriods } from '@/lib/period'
+import { getSubscriptionPeriods } from '@/lib/period'
+
+// TODO: Task 12 adds per-page period filter
 import {
   parseReportFilters,
   getReceiptSummary,
@@ -39,11 +41,9 @@ export default async function AdminReportsPage({ searchParams }: PageProps) {
   if (typeof params['periodId'] === 'string' && periods.some((p) => p.id === params['periodId'])) {
     selectedPeriodId = params['periodId'] as string
   } else {
-    try {
-      selectedPeriodId = await resolveActivePeriodId()
-    } catch {
-      selectedPeriodId = undefined
-    }
+    // Default to first active period if no explicit selection
+    const firstActive = periods.find((p) => p.active)
+    selectedPeriodId = firstActive?.id
   }
 
   const filters = parseReportFilters({ ...params, periodId: selectedPeriodId })

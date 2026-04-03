@@ -9,3 +9,14 @@ services:
     env_file:
       - .env.local
     restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+      target: migrate
+    volumes:
+      - ./prisma:/app/prisma
+    env_file:
+      - .env.local
+    profiles:
+      - tools
