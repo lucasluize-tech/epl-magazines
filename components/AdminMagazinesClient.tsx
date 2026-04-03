@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { toLocalDate } from '@/lib/utils'
-import type { BranchMagazineWithDetails, Branch } from '@/types'
+import type { BranchMagazineWithDetails, Branch, SubscriptionPeriod } from '@/types'
 import Link from 'next/link'
 import { Plus, Pencil, Trash2, BookMarked, SendHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -26,12 +26,11 @@ export interface AdminMagazinesClientProps {
   branchId: string
   branches: Branch[]
   search?: string
-  /** Magazine IDs that have an active MagazineSubscription for the selected period */
-
-  /** Human-readable name of the active subscription period */
+  /** All subscription periods for the period assignment dropdown */
+  periods: SubscriptionPeriod[]
 }
 
-export default function AdminMagazinesClient({ magazines, branchId, branches, search }: AdminMagazinesClientProps) {
+export default function AdminMagazinesClient({ magazines, branchId, branches, search, periods }: AdminMagazinesClientProps) {
   const router = useRouter()
   const [createOpen, setCreateOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<BranchMagazineWithDetails | null>(null)
@@ -97,7 +96,7 @@ export default function AdminMagazinesClient({ magazines, branchId, branches, se
           <Table>
             <TableHeader>
               <TableRow style={{ borderColor: 'oklch(0.876 0.016 88)', backgroundColor: 'oklch(0.963 0.012 91)' }}>
-                {['Name', 'Cadence', 'Qty', 'Total Deliveries', 'Last Received', 'Next Expected', 'Notes', 'Status', 'Actions'].map((h) => (
+                {['Name', 'Cadence', 'Period', 'Qty', 'Total Deliveries', 'Last Received', 'Next Expected', 'Notes', 'Status', 'Actions'].map((h) => (
                   <TableHead
                     key={h}
                     className={`font-semibold ${h === 'Actions' ? 'text-right' : ''}`}
@@ -139,6 +138,29 @@ export default function AdminMagazinesClient({ magazines, branchId, branches, se
                     >
                       {CADENCE_LABELS[sub.magazine.cadence]}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {sub.magazineSubscription ? (
+                      <Badge
+                        variant="outline"
+                        className="text-xs whitespace-nowrap"
+                        style={{
+                          backgroundColor: sub.magazineSubscription.period.active
+                            ? 'oklch(0.45 0.12 250 / 0.10)'
+                            : 'oklch(0.50 0.035 72 / 0.08)',
+                          color: sub.magazineSubscription.period.active
+                            ? 'oklch(0.38 0.12 250)'
+                            : 'oklch(0.50 0.035 72)',
+                          borderColor: sub.magazineSubscription.period.active
+                            ? 'oklch(0.38 0.12 250 / 0.25)'
+                            : 'oklch(0.50 0.035 72 / 0.25)',
+                        }}
+                      >
+                        {sub.magazineSubscription.period.name}
+                      </Badge>
+                    ) : (
+                      <span className="text-sm" style={{ color: 'oklch(0.65 0.025 72)' }}>—</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <span className="text-sm" style={{ color: 'oklch(0.40 0.028 62)' }}>
@@ -253,6 +275,7 @@ export default function AdminMagazinesClient({ magazines, branchId, branches, se
         <EditMagazineDialog
           subscription={editTarget}
           branchId={branchId}
+          periods={periods}
           open={!!editTarget}
           onOpenChange={(v) => { if (!v) setEditTarget(null) }}
         />

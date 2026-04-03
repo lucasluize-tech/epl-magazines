@@ -99,3 +99,46 @@ export async function PUT(
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
+
+/**
+ * DELETE /api/subscription-periods/[id]/subscriptions/[subId]
+ * Hard-deletes a magazine subscription from this period. ADMIN only.
+ */
+export async function DELETE(
+  _request: NextRequest,
+  context: RouteContext,
+): Promise<Response> {
+  const session = await verifySessionForApi()
+  if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  if (session.role !== 'ADMIN') return Response.json({ error: 'Forbidden' }, { status: 403 })
+  try {
+    const { id, subId } = await context.params
+
+    // Fetch for audit log
+    const existing = await db.magazineSubscription.findUnique({
+      where: { id: subId, periodId: id },
+      include: {
+        magazine: { select: { name: true } },
+        period: { select: { name: true } },
+      },
+    })
+    if (!existing) return Response.json({ error: 'Subscription not found' }, { status: 404 })
+
+    await withRetry(() => db.magazineSubscription.delete({ where: { id: subId } }))
+
+    auditLog(session.userId, 'SUBSCRIPTION_UPDATED', {
+      action: 'removed',
+      magazineName: existing.magazine.name,
+      periodName: existing.period.name,
+    })
+
+    return new Response(null, { status: 204 })
+  } catch (err) {
+    const e = err as { code?: string; message?: string }
+    if (e?.code === 'SQLITE_BUSY' || e?.code === 'SQLITE_LOCKED' || (e?.message ?? '').includes('database is locked')) {
+      return Response.json({ error: 'Database is busy, please try again' }, { status: 503 })
+    }
+    console.error('Delete period subscription error:', err)
+    return Response.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}

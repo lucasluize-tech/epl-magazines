@@ -10,7 +10,7 @@ import { computeNextExpectedDate } from '@/lib/cadence'
 import AdminMagazinesClient from '@/components/AdminMagazinesClient'
 import MagazineSearch from '@/components/MagazineSearch'
 import MagazineFilters from '@/components/MagazineFilters'
-import type { BranchMagazineWithDetails } from '@/types'
+import type { BranchMagazineWithDetails, SubscriptionPeriod } from '@/types'
 import type { CadenceType } from '@/types'
 
 export const metadata: Metadata = { title: 'Manage Magazines — EPL Magazine Tracker' }
@@ -55,9 +55,9 @@ export default async function AdminMagazinesPage({ searchParams }: PageProps) {
   const yearStart = new Date(new Date().getFullYear(), 0, 1)
   const yearEnd = new Date(new Date().getFullYear() + 1, 0, 1)
 
-  /** Enrich a subscription with receipt stats */
+  /** Enrich a subscription with receipt stats and period info */
   async function enrichSubscription(sub: { id: string; branchId: string; magazineId: string; quantity: number; active: boolean; createdAt: Date; magazine: { id: string; name: string; cadence: CadenceType; language: string; active: boolean; notes: string | null; createdAt: Date; updatedAt: Date } }): Promise<BranchMagazineWithDetails> {
-    const [totalIssues, lastReceipt] = await Promise.all([
+    const [totalIssues, lastReceipt, magazineSubscription] = await Promise.all([
       db.issueReceipt.count({
         where: {
           magazineId: sub.magazineId,
@@ -69,6 +69,17 @@ export default async function AdminMagazinesPage({ searchParams }: PageProps) {
         where: { magazineId: sub.magazineId, branchId },
         orderBy: { receivedDate: 'desc' },
         select: { receivedDate: true },
+      }),
+      db.magazineSubscription.findFirst({
+        where: { magazineId: sub.magazineId },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          periodId: true,
+          issuesPerYear: true,
+          active: true,
+          period: { select: { name: true, active: true } },
+        },
       }),
     ])
 
@@ -88,6 +99,7 @@ export default async function AdminMagazinesPage({ searchParams }: PageProps) {
       totalIssues,
       lastReceivedDate,
       nextExpectedDate,
+      magazineSubscription: magazineSubscription ?? null,
     }
   }
 
@@ -180,6 +192,12 @@ export default async function AdminMagazinesPage({ searchParams }: PageProps) {
     ? await db.branchMagazine.count({ where: { branchId } })
     : totalCount
 
+  // All subscription periods for the period assignment dropdown
+  const allPeriods: SubscriptionPeriod[] = await db.subscriptionPeriod.findMany({
+    orderBy: { startDate: 'desc' },
+    select: { id: true, name: true, startDate: true, endDate: true, active: true, createdAt: true },
+  })
+
   /** Build URL preserving current params (search + filters) */
   function pageUrl(p: number): string {
     const u = new URLSearchParams()
@@ -226,6 +244,7 @@ export default async function AdminMagazinesPage({ searchParams }: PageProps) {
         branchId={branchId}
         branches={branches}
         search={search}
+        periods={allPeriods}
       />
 
       {/* Pagination */}

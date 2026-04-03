@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { toLocalDate } from '@/lib/utils'
 import { Loader2, Save } from 'lucide-react'
-import type { BranchMagazineWithDetails } from '@/types'
+import type { BranchMagazineWithDetails, SubscriptionPeriod, CadenceType } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -31,14 +31,25 @@ import { CADENCE_LABELS } from '@/lib/cadence'
 export interface EditMagazineDialogProps {
   subscription: BranchMagazineWithDetails
   branchId: string
+  periods: SubscriptionPeriod[]
   open: boolean
   onOpenChange: (open: boolean) => void
+}
+
+/** Default issuesPerYear by cadence for new subscriptions */
+const CADENCE_ISSUES_PER_YEAR: Record<CadenceType, number> = {
+  WEEKLY: 52,
+  BI_WEEKLY: 26,
+  MONTHLY: 12,
+  BI_MONTHLY: 6,
+  SEASONAL: 4,
+  YEARLY: 1,
 }
 
 const CADENCES = Object.entries(CADENCE_LABELS)
 const LANGUAGES = ['English', 'Gujarati', 'Hindi', 'Tamil', 'Telugu']
 
-export default function EditMagazineDialog({ subscription, branchId, open, onOpenChange }: EditMagazineDialogProps) {
+export default function EditMagazineDialog({ subscription, branchId, periods, open, onOpenChange }: EditMagazineDialogProps) {
   const router = useRouter()
 
   // Global fields
@@ -50,6 +61,9 @@ export default function EditMagazineDialog({ subscription, branchId, open, onOpe
   // Branch-specific fields
   const [quantity, setQuantity] = useState(1)
   const [lastReceivedDate, setLastReceivedDate] = useState('')
+
+  // Period assignment: 'none' or a periodId
+  const [selectedPeriodId, setSelectedPeriodId] = useState<string>('none')
 
   const [loading, setLoading] = useState(false)
 
@@ -65,6 +79,7 @@ export default function EditMagazineDialog({ subscription, branchId, open, onOpe
           ? format(toLocalDate(subscription.lastReceivedDate)!, 'yyyy-MM-dd')
           : ''
       )
+      setSelectedPeriodId(subscription.magazineSubscription?.periodId ?? 'none')
     }
   }, [subscription])
 
@@ -117,6 +132,36 @@ export default function EditMagazineDialog({ subscription, branchId, open, onOpe
 
         if (!receiptRes.ok) {
           toast.error('Magazine updated but failed to update last received date')
+        }
+      }
+
+      // Handle period assignment changes
+      const originalPeriodId = subscription.magazineSubscription?.periodId ?? null
+      const newPeriodId = selectedPeriodId === 'none' ? null : selectedPeriodId
+      if (newPeriodId !== originalPeriodId) {
+        // Remove from old period if there was one
+        if (originalPeriodId && subscription.magazineSubscription) {
+          const delRes = await fetch(
+            `/api/subscription-periods/${originalPeriodId}/subscriptions/${subscription.magazineSubscription.id}`,
+            { method: 'DELETE' },
+          )
+          if (!delRes.ok) {
+            toast.error('Magazine updated but failed to remove from previous period')
+          }
+        }
+        // Add to new period if one was selected
+        if (newPeriodId) {
+          const currentCadence = cadence as CadenceType
+          const issuesPerYear = CADENCE_ISSUES_PER_YEAR[currentCadence] ?? 12
+          const addRes = await fetch(`/api/subscription-periods/${newPeriodId}/subscriptions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ magazineId: subscription.magazineId, issuesPerYear }),
+          })
+          if (!addRes.ok) {
+            const data = (await addRes.json()) as { error?: string }
+            toast.error(data.error || 'Magazine updated but failed to assign period')
+          }
         }
       }
 
@@ -194,6 +239,29 @@ export default function EditMagazineDialog({ subscription, branchId, open, onOpe
             />
             <p className="text-xs" style={{ color: 'oklch(0.55 0.030 72)' }}>
               Changing this will create a new receipt record.
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Subscription Period</Label>
+            <Select value={selectedPeriodId} onValueChange={(v) => setSelectedPeriodId(v ?? 'none')}>
+              <SelectTrigger>
+                <SelectValue>
+                  {selectedPeriodId === 'none'
+                    ? 'None'
+                    : (periods.find((p) => p.id === selectedPeriodId)?.name ?? 'None')}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                {periods.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name}{p.active ? '' : ' (Inactive)'}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs" style={{ color: 'oklch(0.55 0.030 72)' }}>
+              Assign this magazine to a subscription period.
             </p>
           </div>
 

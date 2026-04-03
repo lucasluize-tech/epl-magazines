@@ -148,6 +148,14 @@ export interface BranchMagazineWithDetails {
   totalIssues: number
   lastReceivedDate: Date | null
   nextExpectedDate: Date | null
+  /** Most recent MagazineSubscription for this magazine (if any) */
+  magazineSubscription?: {
+    id: string
+    periodId: string
+    issuesPerYear: number
+    active: boolean
+    period: { name: string; active: boolean }
+  } | null
 }
 
 /** Branch with count of active magazine subscriptions */
