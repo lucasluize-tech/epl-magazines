@@ -16,6 +16,8 @@ import MarkReceivedDialog from './MarkReceivedDialog'
 export interface MagazineCardProps {
   magazine: MagazineWithStatus
   activeBranchId: string
+  /** Optional subscription period name — renders as an outline badge when present */
+  periodName?: string
 }
 
 interface StatusStyle {
@@ -76,7 +78,7 @@ function fmt(date: Date | string | null): string {
   return d ? format(d, 'MMM d, yyyy') : '—'
 }
 
-export default function MagazineCard({ magazine, activeBranchId }: MagazineCardProps) {
+export default function MagazineCard({ magazine, activeBranchId, periodName }: MagazineCardProps) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const style = STATUS_STYLES[magazine.status] ?? STATUS_STYLES.never_received
   const StatusIcon = style.icon
@@ -106,17 +108,24 @@ export default function MagazineCard({ magazine, activeBranchId }: MagazineCardP
               {magazine.name}
             </Link>
           </div>
-          <Badge
-            variant="outline"
-            className="w-fit text-xs font-medium mt-1"
-            style={{
-              backgroundColor: 'oklch(0.38 0.082 156 / 0.10)',
-              color: 'oklch(0.38 0.082 156)',
-              borderColor: 'oklch(0.38 0.082 156 / 0.25)',
-            }}
-          >
-            {CADENCE_LABELS[magazine.cadence]}
-          </Badge>
+          <div className="flex items-center gap-1.5 flex-wrap mt-1">
+            <Badge
+              variant="outline"
+              className="w-fit text-xs font-medium"
+              style={{
+                backgroundColor: 'oklch(0.38 0.082 156 / 0.10)',
+                color: 'oklch(0.38 0.082 156)',
+                borderColor: 'oklch(0.38 0.082 156 / 0.25)',
+              }}
+            >
+              {CADENCE_LABELS[magazine.cadence]}
+            </Badge>
+            {periodName && (
+              <Badge variant="outline" className="text-xs">
+                {periodName}
+              </Badge>
+            )}
+          </div>
         </CardHeader>
 
         <CardContent className="pb-3 space-y-1.5 text-sm">

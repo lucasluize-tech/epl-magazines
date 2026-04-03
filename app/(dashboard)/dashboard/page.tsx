@@ -1,16 +1,14 @@
 import type { Metadata } from 'next'
 import type { LucideIcon } from 'lucide-react'
-import type { DashboardStatus, MagazineWithStatus, TransferWithDetails } from '@/types'
+import type { CadenceType, DashboardStatus, MagazineWithStatus, TransferWithDetails } from '@/types'
 import { verifySession } from '@/lib/dal'
 import db from '@/lib/db'
 import { resolveActiveBranchId } from '@/lib/branch'
-import { computeNextExpectedDate, getSubscriptionAwareStatus } from '@/lib/cadence'
+import { computeNextExpectedDate, getSubscriptionAwareStatus, CADENCE_LABELS } from '@/lib/cadence'
 import { getActivePeriods } from '@/lib/period'
 import MagazineCard from '@/components/MagazineCard'
 import TransferCard from '@/components/TransferCard'
 import { AlertTriangle, Clock, BookOpen } from 'lucide-react'
-
-// TODO: Task 8 rewrites this for multi-period
 
 export const metadata: Metadata = { title: 'Dashboard — EPL Magazine Tracker' }
 
@@ -44,7 +42,11 @@ const SECTION_CONFIG: Record<DashboardStatus, SectionConfig> = {
 
 const BUCKET_ORDER: DashboardStatus[] = ['this_week', 'overdue']
 
-type Buckets = Record<DashboardStatus, MagazineWithStatus[]>
+/** A dashboard card with associated period info */
+interface DashboardCard {
+  magazine: MagazineWithStatus
+  periodName: string
+}
 
 export default async function DashboardPage() {
   await verifySession()
@@ -53,9 +55,6 @@ export default async function DashboardPage() {
     resolveActiveBranchId(),
     getActivePeriods(),
   ])
-
-  // Use first active period as fallback until Task 8 rewrites for multi-period
-  const activePeriod = activePeriods[0] ?? null
 
   // Fetch branch name for title
   const currentBranch = await db.branch.findUnique({
@@ -79,96 +78,111 @@ export default async function DashboardPage() {
   // Magazine IDs that have pending transfers — suppress their subscription cards
   const suppressedMagazineIds = new Set(pendingTransfers.map((t) => t.magazineId))
 
-  // Get magazine IDs subscribed at this branch
-  const branchSubscriptions = await db.branchMagazine.findMany({
-    where: { branchId: activeBranchId, active: true },
-    select: { magazineId: true },
-  })
-  const subscribedMagazineIds = branchSubscriptions.map((s) => s.magazineId)
-
-  // Fetch only those magazines with branch-specific receipts (most recent)
-  const magazines = await db.magazine.findMany({
-    where: {
-      id: { in: subscribedMagazineIds },
-      active: true,
-    },
-    include: {
-      receipts: {
-        where: { branchId: activeBranchId },
-        orderBy: { receivedDate: 'desc' as const },
-        take: 1,
-        include: { receivedBy: { select: { name: true } } },
+  // For each active period, fetch subscribed magazines and compute status
+  const periodData = await Promise.all(activePeriods.map(async (period) => {
+    const subscriptions = await db.magazineSubscription.findMany({
+      where: {
+        periodId: period.id,
+        active: true,
+        magazine: {
+          active: true,
+          branches: { some: { branchId: activeBranchId, active: true } },
+        },
       },
-    },
-    orderBy: { name: 'asc' },
-  })
+      include: {
+        magazine: {
+          include: {
+            receipts: {
+              where: { branchId: activeBranchId },
+              orderBy: { receivedDate: 'desc' as const },
+              take: 1,
+              include: { receivedBy: { select: { name: true } } },
+            },
+          },
+        },
+      },
+    })
 
-  // Build per-magazine status using subscription-aware logic
-  const processed: MagazineWithStatus[] = []
-  let completedCount = 0
-  let totalSubscribed = 0
+    let totalIssues = 0
+    let totalReceived = 0
+    const cards: DashboardCard[] = []
 
-  if (activePeriod) {
-    // Period date boundaries
-    const periodStart = new Date(activePeriod.startDate)
-    const periodEnd = new Date(activePeriod.endDate)
+    for (const sub of subscriptions) {
+      if (suppressedMagazineIds.has(sub.magazineId)) continue
 
-    for (const mag of magazines) {
-      if (suppressedMagazineIds.has(mag.id)) continue
+      const periodStart = new Date(period.startDate)
+      const periodEnd = new Date(period.endDate)
 
-      // Fetch subscription for this magazine in the active period
-      const subscription = await db.magazineSubscription.findUnique({
-        where: { magazineId_periodId: { magazineId: mag.id, periodId: activePeriod.id } },
-        select: { issuesPerYear: true, active: true },
-      })
-
-      // Count receipts within the period's date range
-      const periodReceipts = await db.issueReceipt.count({
+      const receiptCount = await db.issueReceipt.count({
         where: {
-          magazineId: mag.id,
+          magazineId: sub.magazineId,
           branchId: activeBranchId,
           receivedDate: { gte: periodStart, lte: periodEnd },
         },
       })
 
-      const issuesPerYear = subscription?.active ? subscription.issuesPerYear : null
+      totalIssues += sub.issuesPerYear
+      totalReceived += receiptCount
 
-      // Track totals for progress bar (only magazines with active subscriptions)
-      if (issuesPerYear !== null) {
-        totalSubscribed++
-        const lastReceipt = mag.receipts[0] ?? null
-        const lastReceivedDate = lastReceipt?.receivedDate ?? null
-        const status = getSubscriptionAwareStatus(
-          lastReceivedDate,
-          mag.cadence,
-          periodReceipts,
-          issuesPerYear,
-          activePeriod.startDate,
-        )
+      const lastReceipt = sub.magazine.receipts[0] ?? null
+      const lastReceivedDate = lastReceipt?.receivedDate ?? null
 
-        if (status === 'completed') {
-          completedCount++
-          continue // Don't show completed on dashboard
-        }
+      const status = getSubscriptionAwareStatus(
+        lastReceivedDate,
+        sub.magazine.cadence as CadenceType,
+        receiptCount,
+        sub.issuesPerYear,
+        period.startDate,
+      )
 
-        if (status === 'overdue' || status === 'this_week') {
-          const anchor = lastReceivedDate ?? activePeriod.startDate
-          const nextExpectedDate = computeNextExpectedDate(anchor, mag.cadence)
-          const { receipts: _receipts, ...rest } = mag
-          processed.push({ ...rest, lastReceivedDate, nextExpectedDate, status })
-        }
-        // 'upcoming', 'never_received', 'not_subscribed' are excluded from dashboard
+      if (status === 'completed') continue // Don't show completed on dashboard
+
+      if (status === 'overdue' || status === 'this_week') {
+        const anchor = lastReceivedDate ?? period.startDate
+        const nextExpectedDate = computeNextExpectedDate(anchor, sub.magazine.cadence as CadenceType)
+        const { receipts: _receipts, ...magRest } = sub.magazine
+
+        cards.push({
+          magazine: {
+            ...magRest,
+            cadence: magRest.cadence as CadenceType,
+            lastReceivedDate,
+            nextExpectedDate,
+            status,
+          },
+          periodName: period.name,
+        })
       }
     }
+
+    return { period, totalIssues, totalReceived, cards }
+  }))
+
+  // Combine cards across all periods
+  const allThisWeek = periodData.flatMap((d) =>
+    d.cards.filter((c) => c.magazine.status === 'this_week')
+  )
+  const allOverdue = periodData.flatMap((d) =>
+    d.cards.filter((c) => c.magazine.status === 'overdue')
+  )
+
+  // Sort by nextExpectedDate ascending (most overdue / earliest first)
+  const sortByExpected = (a: DashboardCard, b: DashboardCard) => {
+    const aDate = a.magazine.nextExpectedDate?.getTime() ?? 0
+    const bDate = b.magazine.nextExpectedDate?.getTime() ?? 0
+    return aDate - bDate
+  }
+  allOverdue.sort(sortByExpected)
+  allThisWeek.sort(sortByExpected)
+
+  const buckets: Record<DashboardStatus, DashboardCard[]> = {
+    this_week: allThisWeek,
+    overdue: allOverdue,
   }
 
-  const buckets: Buckets = {
-    this_week: processed.filter((m) => m.status === 'this_week'),
-    overdue: processed.filter((m) => m.status === 'overdue'),
-  }
-
-  const totalOverdue = buckets.overdue.length
-  const totalThisWeek = buckets.this_week.length + pendingTransfers.length
+  const totalOverdue = allOverdue.length
+  const totalThisWeek = allThisWeek.length + pendingTransfers.length
+  const totalCards = allOverdue.length + allThisWeek.length
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
@@ -198,26 +212,37 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      {/* Progress bar */}
-      {activePeriod && (
-        <div className="mb-6 rounded-xl border p-4" style={{ borderColor: 'oklch(0.876 0.016 88)', backgroundColor: 'oklch(0.978 0.009 88)' }}>
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium" style={{ color: 'oklch(0.30 0.028 62)' }}>
-              Subscription Progress — {activePeriod.name}
-            </span>
-            <span className="text-sm font-bold" style={{ color: 'oklch(0.38 0.082 156)' }}>
-              {completedCount}/{totalSubscribed}
-            </span>
-          </div>
-          <div className="w-full h-2 rounded-full" style={{ backgroundColor: 'oklch(0.90 0.012 88)' }}>
-            <div
-              className="h-2 rounded-full transition-all"
-              style={{
-                width: `${totalSubscribed > 0 ? (completedCount / totalSubscribed) * 100 : 0}%`,
-                backgroundColor: 'oklch(0.38 0.082 156)',
-              }}
-            />
-          </div>
+      {/* Progress bars — one per active period */}
+      {periodData.length > 0 && (
+        <div className="space-y-3 mb-6">
+          {periodData.map(({ period, totalIssues, totalReceived }) => {
+            const pct = totalIssues > 0 ? Math.min((totalReceived / totalIssues) * 100, 100) : 0
+            return (
+              <div
+                key={period.id}
+                className="rounded-xl border p-4"
+                style={{ borderColor: 'oklch(0.876 0.016 88)', backgroundColor: 'oklch(0.978 0.009 88)' }}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium" style={{ color: 'oklch(0.30 0.028 62)' }}>
+                    Subscription Progress — {period.name}
+                  </span>
+                  <span className="text-sm font-bold" style={{ color: 'oklch(0.38 0.082 156)' }}>
+                    {totalReceived}/{totalIssues}
+                  </span>
+                </div>
+                <div className="w-full h-2 rounded-full" style={{ backgroundColor: 'oklch(0.90 0.012 88)' }}>
+                  <div
+                    className="h-2 rounded-full transition-all"
+                    style={{
+                      width: `${pct}%`,
+                      backgroundColor: 'oklch(0.38 0.082 156)',
+                    }}
+                  />
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
 
@@ -287,15 +312,20 @@ export default async function DashboardPage() {
                 {transfers.map((t) => (
                   <TransferCard key={t.id} transfer={t} />
                 ))}
-                {items.map((magazine) => (
-                  <MagazineCard key={magazine.id} magazine={magazine} activeBranchId={activeBranchId} />
+                {items.map((card) => (
+                  <MagazineCard
+                    key={`${card.magazine.id}-${card.periodName}`}
+                    magazine={card.magazine}
+                    activeBranchId={activeBranchId}
+                    periodName={activePeriods.length > 1 ? card.periodName : undefined}
+                  />
                 ))}
               </div>
             </section>
           )
         })}
 
-        {processed.length === 0 && pendingTransfers.length === 0 && (
+        {totalCards === 0 && pendingTransfers.length === 0 && (
           <div className="text-center py-20" style={{ color: 'oklch(0.60 0.025 72)' }}>
             <BookOpen size={40} className="mx-auto mb-4 opacity-30" />
             <p className="text-lg font-medium" style={{ fontFamily: 'var(--font-playfair)' }}>
