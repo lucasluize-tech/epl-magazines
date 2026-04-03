@@ -8,6 +8,7 @@ import { ArrowLeft } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import MagazineSearch from '@/components/MagazineSearch'
 import SubscriptionManagement from '@/components/SubscriptionManagement'
+import PeriodActivationControl from '@/components/PeriodActivationControl'
 import type { MagazineSubscriptionWithDetails } from '@/types'
 
 const PAGE_SIZE = 10
@@ -143,6 +144,11 @@ export default async function SubscriptionPeriodDetailPage({ params, searchParam
           >
             {period.active ? 'Active' : 'Inactive'}
           </Badge>
+          <PeriodActivationControl
+            periodId={period.id}
+            active={period.active}
+            periodName={period.name}
+          />
         </div>
         <p style={{ color: 'oklch(0.50 0.035 72)' }}>
           {formatDate(period.startDate)} &mdash; {formatDate(period.endDate)}

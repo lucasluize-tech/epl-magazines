@@ -84,7 +84,14 @@ export default function SubscriptionManagement({
         body: JSON.stringify({ magazineId: addMagazineId, issuesPerYear: parseInt(addIssuesPerYear, 10) }),
       })
       const data = (await res.json()) as { error?: string; magazine?: { name: string } }
-      if (!res.ok) { toast.error(data.error || 'Failed to add subscription'); return }
+      if (!res.ok) {
+        if (res.status === 409) {
+          toast.error(data.error || 'This magazine is already active in another period')
+        } else {
+          toast.error(data.error || 'Failed to add subscription')
+        }
+        return
+      }
       toast.success(`${data.magazine?.name ?? 'Magazine'} added`)
       setAddOpen(false)
       resetAdd()
@@ -139,7 +146,12 @@ export default function SubscriptionManagement({
         setDeactivateTarget(null)
         router.refresh()
       } else {
-        toast.error('Failed to update subscription')
+        const data = (await res.json()) as { error?: string }
+        if (res.status === 409) {
+          toast.error(data.error || 'This magazine is already active in another period')
+        } else {
+          toast.error(data.error || 'Failed to update subscription')
+        }
       }
     } finally {
       setTogglingId(null)
