@@ -8,6 +8,7 @@ import { computeNextExpectedDate, getSubscriptionAwareStatus, CADENCE_LABELS } f
 import { getActivePeriods } from '@/lib/period'
 import MagazineCard from '@/components/MagazineCard'
 import TransferCard from '@/components/TransferCard'
+import CollapsibleSection from '@/components/CollapsibleSection'
 import { AlertTriangle, Clock, BookOpen } from 'lucide-react'
 
 export const metadata: Metadata = { title: 'Dashboard — EPL Magazine Tracker' }
@@ -281,33 +282,17 @@ export default async function DashboardPage() {
           const transfers = status === 'this_week' ? pendingTransfers : []
           if (items.length === 0 && transfers.length === 0) return null
           const cfg = SECTION_CONFIG[status]
-          const Icon = cfg.icon
           const totalCount = items.length + transfers.length
           return (
-            <section key={status}>
-              <div className="flex items-center gap-2 mb-4">
-                <div
-                  className="w-7 h-7 rounded-md flex items-center justify-center"
-                  style={{ backgroundColor: cfg.bg, border: `1px solid ${cfg.border}` }}
-                >
-                  <Icon size={15} style={{ color: cfg.color }} />
-                </div>
-                <div>
-                  <h2
-                    className="text-base font-semibold leading-tight"
-                    style={{ fontFamily: 'var(--font-playfair)', color: 'oklch(0.15 0.028 62)' }}
-                  >
-                    {cfg.label}
-                    <span className="ml-2 text-sm font-normal" style={{ color: cfg.color }}>
-                      ({totalCount})
-                    </span>
-                  </h2>
-                  <p className="text-xs" style={{ color: 'oklch(0.55 0.030 72)' }}>
-                    {cfg.description}
-                  </p>
-                </div>
-              </div>
-
+            <CollapsibleSection
+              key={status}
+              label={cfg.label}
+              count={totalCount}
+              icon={cfg.icon}
+              color={cfg.color}
+              bg={cfg.bg}
+              border={cfg.border}
+            >
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {transfers.map((t) => (
                   <TransferCard key={t.id} transfer={t} />
@@ -321,7 +306,7 @@ export default async function DashboardPage() {
                   />
                 ))}
               </div>
-            </section>
+            </CollapsibleSection>
           )
         })}
 
