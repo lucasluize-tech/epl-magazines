@@ -71,7 +71,7 @@ export default function TransferCard({ transfer }: TransferCardProps) {
         </Badge>
       </CardHeader>
 
-      <CardContent className="pb-3 space-y-1.5 text-sm">
+      <CardContent className="pb-4 space-y-1.5 text-sm">
         <div className="flex items-center gap-2" style={{ color: 'oklch(0.50 0.035 72)' }}>
           <SendHorizontal size={13} className="flex-shrink-0" style={{ color: 'oklch(0.55 0.18 250)' }} />
           <span>
