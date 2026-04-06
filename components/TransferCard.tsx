@@ -84,7 +84,7 @@ export default function TransferCard({ transfer }: TransferCardProps) {
         </div>
       </CardContent>
 
-      <CardFooter className="gap-2 items-center justify-center bg-transparent border-t-0">
+      <CardFooter className="gap-2 items-center justify-center">
         <Button
           size="sm"
           className="flex-1 gap-1.5 text-xs h-8 cursor-pointer"
