@@ -158,7 +158,7 @@ export default function MagazineCard({ magazine, activeBranchId, periodName }: M
           )}
         </CardContent>
 
-        <CardFooter className="items-center justify-center">
+        <CardFooter className="items-center justify-center bg-transparent border-t-0">
           <Button
             size="sm"
             className="flex-1 gap-1.5 text-xs h-8 cursor-pointer"
