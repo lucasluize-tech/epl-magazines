@@ -54,7 +54,7 @@ export async function createSession(userId: string, role: UserRole): Promise<voi
 
   cookieStore.set('session', token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: false, // Internal LAN only — no HTTPS
     sameSite: 'lax',
     expires: expiresAt,
     path: '/',
