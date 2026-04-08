@@ -103,7 +103,7 @@ export default function AdminTransfersClient({ transfers, currentFilter }: Admin
           <button
             key={opt.value}
             onClick={() => applyFilter(opt.value)}
-            className="px-3 py-1.5 rounded-full text-xs font-medium transition-all border"
+            className="px-3 py-1.5 rounded-full text-xs font-medium transition-all border cursor-pointer"
             style={{
               backgroundColor: currentFilter === opt.value
                 ? 'oklch(0.38 0.082 156)'
@@ -207,7 +207,7 @@ export default function AdminTransfersClient({ transfers, currentFilter }: Admin
                         <Button
                           size="sm"
                           variant="outline"
-                          className="h-7 text-xs gap-1"
+                          className="h-7 text-xs gap-1 cursor-pointer"
                           onClick={() => setCancelTarget(t)}
                           disabled={cancellingId === t.id}
                           style={{ color: 'oklch(0.56 0.225 27)', borderColor: 'oklch(0.56 0.225 27 / 0.3)' }}
