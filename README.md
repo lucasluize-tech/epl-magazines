@@ -86,8 +86,27 @@ The app will be available at `http://localhost:3000`.
 ### Docker Deployment
 
 ```bash
+# 1. Create required directories and environment file
+mkdir -p logs
+cat > .env.local << EOF
+SESSION_SECRET=$(openssl rand -base64 32)
+DATABASE_URL="file:./prisma/dev.db"
+EOF
+
+# 2. Build the image
+docker compose build
+
+# 3. Run database migrations
+docker compose run --rm migrate
+
+# 4. Seed the database (fresh install only)
+docker compose run --rm migrate tsx prisma/seed.ts
+
+# 5. Start the app
 docker compose up -d
 ```
+
+The `.env.local` file is **required** — the build will fail without it. It is gitignored and must be created on each server.
 
 This mounts `prisma/` (SQLite database) and `logs/` (audit log) as volumes for persistence. The container includes a health check that polls `/api/health` every 30 seconds and automatically restarts if unhealthy.
 
