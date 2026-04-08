@@ -3,6 +3,7 @@ set -euo pipefail
 
 # ── Config ────────────────────────────────────────────────────────────
 CTID=100
+CT_ROOT="/var/lib/lxc/${CTID}/rootfs"
 HEALTH_URL="http://10.101.16.231:3000/api/health"
 HEALTH_TIMEOUT=10
 DISK_THRESHOLD=80
@@ -16,18 +17,12 @@ MAIL_TO="itdepartment@edisonpubliclibrary.org"
 MAIL_FROM="proxmox-alerts@edisonpubliclibrary.org"
 
 # ── Helpers ───────────────────────────────────────────────────────────
-log() { echo "$(date -Iseconds) $1" >> "$LOGFILE"; }
+log() { echo "$(date '+%Y-%m-%d %H:%M:%S') $1" >> "$LOGFILE"; }
 
 send_email() {
   local subject="$1"
   local body="$2"
-  sendmail -t <<EOF
-From: ${MAIL_FROM}
-To: ${MAIL_TO}
-Subject: ${subject}
-
-${body}
-EOF
+  echo -e "$body" | mail -s "[Proxmox Alert] $subject" -r "$MAIL_FROM" "$MAIL_TO"
 }
 
 # check_condition <name> <pass:true|false> <flag_file> <detail>
@@ -44,11 +39,7 @@ check_condition() {
       if [ ! -f "$MAINTENANCE_FLAG" ]; then
         send_email \
           "[EPL-MAGAZINES] ALERT: ${name}" \
-          "EPL Magazine Tracker — ${name}
-Time: $(date -Iseconds)
-Detail: ${detail}
-
-Check log: ${LOGFILE}"
+          "EPL Magazine Tracker — ${name}\nTime: $(date '+%Y-%m-%d %H:%M:%S')\nHost: $(hostname)\nDetail: ${detail}\n\nCheck log: ${LOGFILE}"
         log "Alert email sent for ${name}"
       else
         log "Maintenance mode — alert suppressed for ${name}"
@@ -60,9 +51,7 @@ Check log: ${LOGFILE}"
       if [ ! -f "$MAINTENANCE_FLAG" ]; then
         send_email \
           "[EPL-MAGAZINES] RECOVERED: ${name}" \
-          "EPL Magazine Tracker — ${name} recovered
-Time: $(date -Iseconds)
-Detail: ${detail}"
+          "EPL Magazine Tracker — ${name} recovered\nTime: $(date '+%Y-%m-%d %H:%M:%S')\nHost: $(hostname)\nDetail: ${detail}"
         log "Recovery email sent for ${name}"
       else
         log "Maintenance mode — recovery suppressed for ${name}"
@@ -91,22 +80,28 @@ fi
 
 check_condition "Health check failed" "$HEALTH_PASS" "$HEALTH_FLAG" "$HEALTH_DETAIL"
 
-# ── Disk Check ────────────────────────────────────────────────────────
+# ── Disk Check (read from CT rootfs on PVE host) ─────────────────────
 DISK_PASS="true"
 DISK_DETAIL="ok"
 
-DISK_USAGE=$(pct exec "$CTID" -- df --output=pcent / 2>/dev/null | tail -1 | tr -d ' %') || {
-  DISK_PASS="false"
-  DISK_DETAIL="Could not read disk usage from CT ${CTID}"
-}
+# Check disk usage of the CT's root filesystem via the host mount
+if [ -d "$CT_ROOT" ]; then
+  DISK_USAGE=$(df --output=pcent "$CT_ROOT" 2>/dev/null | tail -1 | tr -d ' %') || {
+    DISK_PASS="false"
+    DISK_DETAIL="Could not read disk usage for CT ${CTID} rootfs"
+  }
 
-if [ "$DISK_PASS" = "true" ] && [ "$DISK_USAGE" -ge "$DISK_THRESHOLD" ]; then
-  DISK_PASS="false"
-  DISK_DETAIL="Disk usage at ${DISK_USAGE}% (threshold: ${DISK_THRESHOLD}%)"
-fi
+  if [ "$DISK_PASS" = "true" ] && [ "$DISK_USAGE" -ge "$DISK_THRESHOLD" ]; then
+    DISK_PASS="false"
+    DISK_DETAIL="Disk usage at ${DISK_USAGE}% (threshold: ${DISK_THRESHOLD}%)"
+  fi
 
-if [ "$DISK_PASS" = "true" ]; then
-  DISK_DETAIL="Disk usage at ${DISK_USAGE}%"
+  if [ "$DISK_PASS" = "true" ]; then
+    DISK_DETAIL="Disk usage at ${DISK_USAGE}%"
+  fi
+else
+  DISK_PASS="false"
+  DISK_DETAIL="CT ${CTID} rootfs not found at ${CT_ROOT} — container may be stopped"
 fi
 
 check_condition "Disk usage high on CT ${CTID}" "$DISK_PASS" "$DISK_FLAG" "$DISK_DETAIL"
