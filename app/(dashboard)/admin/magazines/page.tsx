@@ -209,7 +209,6 @@ export default async function AdminMagazinesPage({ searchParams }: PageProps) {
       <AdminMagazinesClient
         magazines={enriched}
         branchId={branchId}
-        branches={branches}
         search={search}
         periods={allPeriods}
       />

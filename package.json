@@ -10,6 +10,7 @@
     "lint": "eslint",
     "seed": "tsx prisma/seed.ts",
     "seed-test": "tsx prisma/seed_test.ts",
+    "seed:demo": "tsx prisma/seed_demo.ts",
     "migrate:safe": "tsx scripts/migrate-safe.ts",
     "migrate:dev" : "rm prisma/dev.db && npx prisma migrate dev --name init && npm run seed && npm run dev"
   },

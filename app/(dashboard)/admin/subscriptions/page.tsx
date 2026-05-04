@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/table'
 import CreatePeriodDialog from '@/components/CreatePeriodDialog'
 
-export const metadata: Metadata = { title: 'Subscription Periods — EPL Magazine Tracker' }
+export const metadata: Metadata = { title: 'Vendor Periods — EPL Magazine Tracker' }
 
 export default async function AdminSubscriptionsPage() {
   const user = await getUser()
@@ -31,7 +31,7 @@ export default async function AdminSubscriptionsPage() {
           className="text-3xl font-bold mb-1"
           style={{ fontFamily: 'var(--font-playfair)', color: 'oklch(0.15 0.028 62)' }}
         >
-          Subscription Periods
+          Vendor Periods
         </h1>
         <p style={{ color: 'oklch(0.50 0.035 72)' }}>
           {periods.length} period{periods.length !== 1 ? 's' : ''}

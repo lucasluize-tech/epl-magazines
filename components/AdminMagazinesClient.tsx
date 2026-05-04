@@ -3,9 +3,9 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import type { BranchMagazineWithDetails, Branch, SubscriptionPeriod } from '@/types'
+import type { BranchMagazineWithDetails, SubscriptionPeriod } from '@/types'
 import Link from 'next/link'
-import { Plus, Pencil, Trash2, BookMarked, SendHorizontal } from 'lucide-react'
+import { Plus, Pencil, Trash2, BookMarked } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
@@ -16,24 +16,21 @@ import { CADENCE_LABELS } from '@/lib/cadence'
 import CreateMagazineDialog from './CreateMagazineDialog'
 import EditMagazineDialog from './EditMagazineDialog'
 import DeleteConfirmDialog from './DeleteConfirmDialog'
-import TransferDialog from './TransferDialog'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 
 export interface AdminMagazinesClientProps {
   magazines: BranchMagazineWithDetails[]
   branchId: string
-  branches: Branch[]
   search?: string
   /** All subscription periods for the period assignment dropdown */
   periods: SubscriptionPeriod[]
 }
 
-export default function AdminMagazinesClient({ magazines, branchId, branches, search, periods }: AdminMagazinesClientProps) {
+export default function AdminMagazinesClient({ magazines, branchId, search, periods }: AdminMagazinesClientProps) {
   const router = useRouter()
   const [createOpen, setCreateOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<BranchMagazineWithDetails | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<BranchMagazineWithDetails | null>(null)
-  const [transferTarget, setTransferTarget] = useState<BranchMagazineWithDetails | null>(null)
   const [togglingId, setTogglingId] = useState<string | null>(null)
 
   async function toggleActive(sub: BranchMagazineWithDetails) {
@@ -94,7 +91,7 @@ export default function AdminMagazinesClient({ magazines, branchId, branches, se
           <Table>
             <TableHeader>
               <TableRow style={{ borderColor: 'oklch(0.876 0.016 88)', backgroundColor: 'oklch(0.963 0.012 91)' }}>
-                {['Name', 'Cadence', 'Period', 'QTY/Branch', 'Issues/Period', 'Status', 'Actions'].map((h) => (
+                {['Name', 'Cadence', 'Vendor', 'QTY/Branch', 'Issues/Period', 'Status', 'Actions'].map((h) => (
                   <TableHead
                     key={h}
                     className={`font-semibold ${h === 'Actions' ? 'text-right' : ''}`}
@@ -199,22 +196,6 @@ export default function AdminMagazinesClient({ magazines, branchId, branches, se
                                 size="sm"
                                 variant="ghost"
                                 className="h-7 w-7 p-0"
-                                onClick={() => setTransferTarget(sub)}
-                                disabled={sub.quantity < 1}
-                              />
-                            }
-                          >
-                            <SendHorizontal size={14} style={{ color: 'oklch(0.45 0.082 156)' }} />
-                          </TooltipTrigger>
-                          <TooltipContent>Transfer</TooltipContent>
-                        </Tooltip>
-                        <Tooltip>
-                          <TooltipTrigger
-                            render={
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 w-7 p-0"
                                 onClick={() => setEditTarget(sub)}
                               />
                             }
@@ -257,17 +238,6 @@ export default function AdminMagazinesClient({ magazines, branchId, branches, se
           periods={periods}
           open={!!editTarget}
           onOpenChange={(v) => { if (!v) setEditTarget(null) }}
-        />
-      )}
-
-      {transferTarget && (
-        <TransferDialog
-          magazineName={transferTarget.magazine.name}
-          magazineId={transferTarget.magazineId}
-          maxQuantity={transferTarget.quantity}
-          availableBranches={branches.filter(b => b.id !== branchId)}
-          open={!!transferTarget}
-          onOpenChange={(v) => { if (!v) setTransferTarget(null) }}
         />
       )}
 
