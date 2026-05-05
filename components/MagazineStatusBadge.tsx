@@ -29,7 +29,7 @@ const STATUS_CONFIG: Record<MagazineStatus, StatusConfig> = {
   },
   completed: {
     label: 'Completed',
-    style: { backgroundColor: 'oklch(0.92 0.05 155)', color: 'oklch(0.30 0.08 155)', border: 'none' },
+    style: { backgroundColor: 'oklch(0.93 0.045 200)', color: 'oklch(0.38 0.11 200)', border: 'none' },
   },
   not_subscribed: {
     label: 'Not Subscribed',

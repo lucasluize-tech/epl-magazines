@@ -120,18 +120,18 @@ export function parseReportFilters(
   params: Record<string, string | string[] | undefined>
 ): ReportFilters {
   const tab = (params['tab'] as ReportTab | undefined) ?? 'receipts'
-  const period = (params['period'] as ReportPeriod | undefined) ?? 'this_month'
+  const period = (params['period'] as ReportPeriod | undefined) ?? 'this_year'
   const branch = typeof params['branch'] === 'string' ? params['branch'] : 'all'
   const language = typeof params['language'] === 'string' ? params['language'] : 'all'
 
-  // Parse custom date range if provided; fall back to current month boundaries
+  // Parse custom date range if provided; fall back to current year boundaries
   const now = new Date()
   const customFrom = params['from']
     ? new Date((params['from'] as string).split('T')[0] + 'T12:00:00Z')
-    : startOfMonth(now)
+    : startOfYear(now)
   const customTo = params['to']
     ? new Date((params['to'] as string).split('T')[0] + 'T12:00:00Z')
-    : endOfMonth(now)
+    : endOfYear(now)
 
   const { from, to } = resolveDateRange(period, customFrom, customTo)
 
@@ -682,16 +682,21 @@ async function getSubscriptionOverviewForPeriod(
     include: { branch: { select: { name: true } } },
   })
 
-  // Build a Map: magazineId → first matching BranchMagazine (for qty/branch/active)
-  const bmMap = new Map<string, { branchName: string; quantity: number; active: boolean }>()
+  // Aggregate per magazine across the matching branches.
+  // When filters.branch === 'all', branchMags contains rows for every active
+  // subscription branch; otherwise it's filtered to one branch.
+  // We need: total quantity, branch count (multiplier for Expected), one
+  // representative branch label, and whether any row is active.
+  const bmAgg = new Map<
+    string,
+    { branchNames: string[]; totalQuantity: number; active: boolean }
+  >()
   for (const bm of branchMags) {
-    if (!bmMap.has(bm.magazineId)) {
-      bmMap.set(bm.magazineId, {
-        branchName: bm.branch.name,
-        quantity: bm.quantity,
-        active: bm.active,
-      })
-    }
+    const cur = bmAgg.get(bm.magazineId) ?? { branchNames: [], totalQuantity: 0, active: false }
+    cur.branchNames.push(bm.branch.name)
+    cur.totalQuantity += bm.quantity
+    if (bm.active) cur.active = true
+    bmAgg.set(bm.magazineId, cur)
   }
 
   // Batch-count receipts within the period date range per magazine
@@ -711,16 +716,26 @@ async function getSubscriptionOverviewForPeriod(
   }
 
   return magazineSubs.map((ms) => {
-    const bm = bmMap.get(ms.magazineId)
+    const agg = bmAgg.get(ms.magazineId)
+    const branchCount = agg?.branchNames.length ?? 0
+    const branchLabel = filters.branch !== 'all'
+      ? agg?.branchNames[0] ?? '(No branch)'
+      : branchCount === 0
+        ? '(No branch)'
+        : branchCount === 1
+          ? agg!.branchNames[0]
+          : `${branchCount} branches`
     return {
       magazineId: ms.magazineId,
-      branchName: bm?.branchName ?? '(No branch)',
+      branchName: branchLabel,
       magazineName: ms.magazine.name,
       language: ms.magazine.language,
       cadence: ms.magazine.cadence as CadenceType,
-      quantity: bm?.quantity ?? 0,
-      active: bm?.active ?? false,
-      issuesPerYear: ms.issuesPerYear,
+      quantity: agg?.totalQuantity ?? 0,
+      active: agg?.active ?? false,
+      // Expected scales with branch count when summing across branches, so
+      // Received and Expected are comparable on the same row.
+      issuesPerYear: ms.issuesPerYear * Math.max(1, branchCount),
       receivedCount: receiptCountMap.get(ms.magazineId) ?? 0,
       periodName: period.name,
     }

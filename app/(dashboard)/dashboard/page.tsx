@@ -9,9 +9,9 @@ import { getActivePeriods } from '@/lib/period'
 import MagazineCard from '@/components/MagazineCard'
 import TransferCard from '@/components/TransferCard'
 import CollapsibleSection from '@/components/CollapsibleSection'
-import { AlertTriangle, Clock, BookOpen } from 'lucide-react'
+import { AlertTriangle, Clock } from 'lucide-react'
 
-export const metadata: Metadata = { title: 'Dashboard — EPL Magazine Tracker' }
+export const metadata: Metadata = { title: 'Check-ins — EPL Magazine Tracker' }
 
 interface SectionConfig {
   label: string
@@ -53,7 +53,8 @@ interface DashboardCard {
 }
 
 export default async function DashboardPage() {
-  await verifySession()
+  const session = await verifySession()
+  const isAdmin = session.role === 'ADMIN'
 
   const [activeBranchId, activePeriods] = await Promise.all([
     resolveActiveBranchId(),
@@ -186,7 +187,6 @@ export default async function DashboardPage() {
 
   const totalOverdue = allOverdue.length
   const totalThisWeek = allThisWeek.length + pendingTransfers.length
-  const totalCards = allOverdue.length + allThisWeek.length
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
@@ -196,7 +196,7 @@ export default async function DashboardPage() {
           className="text-3xl font-bold mb-1"
           style={{ fontFamily: 'var(--font-playfair)', color: 'oklch(0.15 0.028 62)' }}
         >
-          <span style={{ color: 'oklch(0.50 0.035 72)' }}>Dashboard for </span>
+          <span style={{ color: 'oklch(0.50 0.035 72)' }}>Check-ins for </span>
           {currentBranch && (
             <span className="underline" style={{ color: 'oklch(0.15 0.028 62)' }}>{currentBranch.name}</span>
           )}
@@ -216,8 +216,8 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      {/* Progress bars — one per active period */}
-      {periodData.length > 0 && (
+      {/* Progress bars — one per active period (ADMIN only) */}
+      {isAdmin && periodData.length > 0 && (
         <div className="space-y-3 mb-6">
           {periodData.map(({ period, totalIssues, totalReceived }) => {
             const pct = totalIssues > 0 ? Math.min((totalReceived / totalIssues) * 100, 100) : 0
@@ -283,7 +283,7 @@ export default async function DashboardPage() {
         {BUCKET_ORDER.map((status) => {
           const items = buckets[status]
           const transfers = status === 'this_week' ? pendingTransfers : []
-          if (items.length === 0 && transfers.length === 0) return null
+          const isEmpty = items.length === 0 && transfers.length === 0
           const cfg = SECTION_CONFIG[status]
           const totalCount = items.length + transfers.length
           return (
@@ -295,34 +295,30 @@ export default async function DashboardPage() {
               color={cfg.color}
               bg={cfg.bg}
               border={cfg.border}
-              defaultOpen={status !== 'overdue'}
+              defaultOpen
             >
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {transfers.map((t) => (
-                  <TransferCard key={t.id} transfer={t} />
-                ))}
-                {items.map((card) => (
-                  <MagazineCard
-                    key={`${card.magazine.id}-${card.periodName}`}
-                    magazine={card.magazine}
-                    activeBranchId={activeBranchId}
-                    periodName={activePeriods.length > 1 ? card.periodName : undefined}
-                  />
-                ))}
-              </div>
+              {isEmpty ? (
+                <p className="text-center text-sm italic py-6" style={{ color: 'oklch(0.55 0.025 72)' }}>
+                  All caught up.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {transfers.map((t) => (
+                    <TransferCard key={t.id} transfer={t} />
+                  ))}
+                  {items.map((card) => (
+                    <MagazineCard
+                      key={`${card.magazine.id}-${card.periodName}`}
+                      magazine={card.magazine}
+                      activeBranchId={activeBranchId}
+                      periodName={activePeriods.length > 1 ? card.periodName : undefined}
+                    />
+                  ))}
+                </div>
+              )}
             </CollapsibleSection>
           )
         })}
-
-        {totalCards === 0 && pendingTransfers.length === 0 && (
-          <div className="text-center py-20" style={{ color: 'oklch(0.60 0.025 72)' }}>
-            <BookOpen size={40} className="mx-auto mb-4 opacity-30" />
-            <p className="text-lg font-medium" style={{ fontFamily: 'var(--font-playfair)' }}>
-              No magazines expected right now
-            </p>
-            <p className="text-sm mt-1">Check back when deliveries are due this week.</p>
-          </div>
-        )}
       </div>
     </div>
   )

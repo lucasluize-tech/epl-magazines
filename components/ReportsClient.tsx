@@ -72,11 +72,12 @@ const PERIOD_OPTIONS: { value: ReportPeriod; label: string }[] = [
   { value: 'custom', label: 'Custom' },
 ]
 
-/** Tab options rendered as a secondary button row. */
+/** Tab options rendered as a secondary button row.
+ *  Note: 'transfers' is omitted — transfer activity is now shown on the
+ *  dedicated /admin/transfers (Shuffles) page. */
 const TAB_OPTIONS: { value: ReportTab; label: string }[] = [
   { value: 'receipts', label: 'Receipts' },
   { value: 'overdue', label: 'Overdue' },
-  { value: 'transfers', label: 'Transfers' },
   { value: 'subscriptions', label: 'Subscriptions' },
   { value: 'timeline', label: 'Timeline' },
 ]
@@ -172,7 +173,7 @@ export default function ReportsClient({
       ...overrides,
     }
     for (const [k, v] of Object.entries(merged)) {
-      if (v && v !== 'all' && !(k === 'tab' && v === 'receipts') && !(k === 'period' && v === 'this_month')) {
+      if (v && v !== 'all' && !(k === 'tab' && v === 'receipts') && !(k === 'period' && v === 'this_year')) {
         params.set(k, v)
       }
     }
@@ -212,7 +213,7 @@ export default function ReportsClient({
             Reports
           </h1>
           <p style={{ color: 'oklch(0.50 0.035 72)' }}>
-            Analyze receipts, overdue items, transfers, and trends 
+            Analyze receipts, overdue items, and trends
           </p>
         </div>
         <a href={buildExportUrl()}>

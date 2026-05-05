@@ -21,6 +21,8 @@ export interface AdminTransfersClientProps {
   transfers: TransferWithDetails[]
   /** Currently active status filter, or 'ALL' for no filter. */
   currentFilter: TransferStatus | 'ALL'
+  /** Overall counts across all transfers (independent of the current filter). */
+  summary: { total: number; completed: number; cancelled: number }
 }
 
 /** Badge colour tokens keyed by transfer status. */
@@ -64,7 +66,7 @@ function fmt(date: Date | string | null): string {
  * Client component for the admin transfers page.
  * Renders a filter bar and a table of transfers with cancel actions for pending items.
  */
-export default function AdminTransfersClient({ transfers, currentFilter }: AdminTransfersClientProps) {
+export default function AdminTransfersClient({ transfers, currentFilter, summary }: AdminTransfersClientProps) {
   const router = useRouter()
   const pathname = usePathname()
   const [cancellingId, setCancellingId] = useState<string | null>(null)
@@ -223,6 +225,18 @@ export default function AdminTransfersClient({ transfers, currentFilter }: Admin
           </Table>
         </div>
       )}
+
+      {/* Overall summary — independent of current filter */}
+      <p
+        className="mt-4 text-sm"
+        style={{ color: 'oklch(0.50 0.035 72)' }}
+      >
+        Total: <span className="font-semibold" style={{ color: 'oklch(0.20 0.028 62)' }}>{summary.total}</span>
+        {' · '}
+        Completed: <span className="font-semibold" style={{ color: 'oklch(0.38 0.082 156)' }}>{summary.completed}</span>
+        {' · '}
+        Cancelled: <span className="font-semibold" style={{ color: 'oklch(0.56 0.225 27)' }}>{summary.cancelled}</span>
+      </p>
 
       {cancelTarget && (
         <DeleteConfirmDialog

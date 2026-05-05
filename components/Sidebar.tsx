@@ -43,14 +43,14 @@ const CREAM = 'oklch(0.92 0.010 91)'
 const CREAM_MUTED = 'oklch(0.62 0.020 155)'
 
 const navItems: NavItem[] = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/magazines', label: 'Magazines', icon: BookOpen },
+  { href: '/dashboard', label: 'Check-ins', icon: LayoutDashboard },
+  { href: '/magazines', label: 'Processing', icon: BookOpen },
 ]
 
 const adminItems: NavItem[] = [
-  { href: '/admin/subscriptions', label: 'Subscriptions', icon: CalendarRange },
+  { href: '/admin/subscriptions', label: 'Vendors', icon: CalendarRange },
   { href: '/admin/magazines', label: 'Manage Magazines', icon: BookMarked },
-  { href: '/admin/transfers', label: 'Transfers', icon: ArrowLeftRight },
+  { href: '/admin/transfers', label: 'Shuffles', icon: ArrowLeftRight },
   { href: '/admin/reports', label: 'Reports', icon: BarChart3 },
   { href: '/admin/users', label: 'Manage Users', icon: Users },
   { href: '/log', label: 'Audit Log', icon: ScrollText },
@@ -110,7 +110,7 @@ export default function Sidebar({ user, branches, activeBranchId, defaultCollaps
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
         {!collapsed && (
           <p className="px-2 pb-1 text-xs font-medium uppercase tracking-widest" style={{ color: CREAM_MUTED }}>
-            Navigation
+            Branch
           </p>
         )}
 
